@@ -34,3 +34,4 @@ config.json
 *.token
 *.env*
 credentials*.json
+*Снимок экрана*
