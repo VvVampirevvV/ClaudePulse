@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Temporary and local test files
+*.log
+simulate.py
+test.py
+test_*.py
+take_screenshot.py
