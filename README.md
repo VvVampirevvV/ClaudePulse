@@ -2,7 +2,7 @@
 
 # ⚡ Claude Pulse 3.0
 
-**Интеллектуальный менеджер сессий и квот для Claude Code CLI с дизайном в стиле ExitLag Dark**
+**Интеллектуальный менеджер сессий и квот для Claude Code CLI**
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=windows)](https://github.com/VvVampirevvV/ClaudePulse)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python)](https://www.python.org/)
