@@ -74,7 +74,7 @@
 ## 🚀 Установка и быстрый старт (Installation)
 
 ### Вариант 1. Запуск готового EXE (Рекомендуется)
-1. Перейдите в раздел [Releases](https://github.com/VvVampirevvV/ClaudePulse/releases) или папку `dist/`.
+1. Перейдите в раздел [Releases]([https://github.com/VvVampirevvV/ClaudePulse](https://github.com/VvVampirevvV/ClaudePulse)/releases) или папку `dist/`.
 2. Скачайте файл **`ClaudePulse.exe`**.
 3. Запустите программу — установка не требуется, приложение портативно и готово к работе!
 
