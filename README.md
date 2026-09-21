@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ Claude Pulse 3.0 VER WORK
+# ⚡ Claude Pulse 3.0
 
 **Интеллектуальный менеджер сессий и квот для Claude Code CLI с дизайном в стиле ExitLag Dark**
 
