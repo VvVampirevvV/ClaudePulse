@@ -26,3 +26,11 @@ simulate.py
 test.py
 test_*.py
 take_screenshot.py
+temp_*
+
+# Secrets and User Data
+config.json
+*.key
+*.token
+*.env*
+credentials*.json
