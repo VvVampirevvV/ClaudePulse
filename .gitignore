@@ -35,3 +35,7 @@ config.json
 *.env*
 credentials*.json
 *Снимок экрана*
+
+# Настоящие тесты проекта — в git
+!tests/
+!tests/test_*.py

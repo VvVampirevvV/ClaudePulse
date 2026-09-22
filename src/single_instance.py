@@ -1,15 +1,20 @@
+import os
+import zlib
 import ctypes
 from ctypes import wintypes
 import sys
 
 # Глобальный уникальный идентификатор мьютекса для Claude Pulse
 MUTEX_NAME = "Global\\ClaudePulse_SingleInstance_Mutex_9981"
+# Отдельный профиль (CLAUDEPULSE_HOME) — отдельный экземпляр, например для второго аккаунта или тестов
+if os.getenv("CLAUDEPULSE_HOME"):
+    MUTEX_NAME += "_%08x" % zlib.crc32(os.getenv("CLAUDEPULSE_HOME").encode("utf-8"))
 ERROR_ALREADY_EXISTS = 183
 SW_RESTORE = 9
 
 _single_instance_mutex = None
 
-def ensure_single_instance(window_title: str = "Claude Pulse 3.0 VER WORK") -> bool:
+def ensure_single_instance(window_title: str = "Claude Pulse") -> bool:
     """
     Гарантирует запуск только одной копии приложения (Single Instance).
     

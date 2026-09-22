@@ -15,6 +15,7 @@ def build():
         "--icon=assets/icon.ico",
         "--name=ClaudePulse",
         "--add-data=assets;assets",
+        "--collect-data=tzdata",  # часовые пояса для времени сброса из /usage
         "main.py"
     ]
     

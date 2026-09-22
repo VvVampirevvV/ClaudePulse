@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.config import load_config, APP_VERSION
+from src.i18n import set_lang
 from src.scheduler import SchedulerManager
 from src.notifications import send_toast
 from src.ui.main_window import MainWindow
@@ -28,7 +29,8 @@ def main():
         sys.exit(0)
 
     config = load_config()
-    
+    set_lang(config.get("language", ""))
+
     # Initialize Scheduler
     scheduler = SchedulerManager()
     scheduler.set_config(config)
@@ -51,10 +53,11 @@ def main():
         app.after(0, _restore)
         
     def exit_app(icon=None, item=None):
+        # Вызывается из потока трея — tkinter трогаем только из главного потока
         scheduler.stop()
         if tray:
             tray.stop()
-        app.quit()
+        app.after(0, app.quit)
         
     app = MainWindow(scheduler, on_closing)
     tray = TrayManager(icon_path, scheduler, show_window, exit_app)

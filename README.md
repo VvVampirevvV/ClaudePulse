@@ -1,183 +1,97 @@
 <div align="center">
 
-# ⚡ Claude Pulse 3.0 VER WORK
+# ⚡ Claude Pulse 3.1
 
-**Интеллектуальный менеджер сессий и квот для Claude Code CLI с дизайном в стиле ExitLag Dark**
+**Your Claude Code limits on the desktop — and the 5-hour window opened on schedule**
+
+**English** · [Русский](README.ru.md)
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=windows)](https://github.com/VvVampirevvV/ClaudePulse)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python)](https://www.python.org/)
-[![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet?style=for-the-badge)](https://github.com/TomSchimansky/CustomTkinter)
 [![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)](LICENSE)
-[![Release](https://img.shields.io/badge/Version-3.0%20VER%20WORK-ef4444?style=for-the-badge)](https://github.com/VvVampirevvV/ClaudePulse/releases)
+[![Download](https://img.shields.io/badge/Download-EXE%203.1-ef4444?style=for-the-badge)](https://github.com/VvVampirevvV/ClaudePulse/raw/main/dist/ClaudePulse.exe)
 
 <p align="center">
-  <img src="screenshot.png" alt="Claude Pulse 3.0 Dashboard" width="900" style="border-radius: 10px; border: 1px solid #3b3f54;" />
+  <img src="screenshot.png" alt="Claude Pulse" width="900" style="border-radius: 10px; border: 1px solid #3b3f54;" />
 </p>
 
 </div>
 
 ---
 
-## 📖 О проекте (Overview)
+## 📖 Why
 
-**Claude Pulse** — это специализированное настольное приложение для Windows, предназначенное для разработчиков, активно использующих **Claude Code CLI** (Anthropic). 
+Claude Pro and Max limits work in 5-hour windows: a window opens with your first request and resets exactly 5 hours later. Start work at 14:00 and your limit only refreshes at 19:00, in the middle of your day.
 
-Главная цель приложения — **автоматически удерживать 5-часовое сессионное окно лимитов открытым**, предотвращать простои в работе из-за Rate Limit и предоставлять детальный живой мониторинг официальных квот прямо на рабочем столе.
-
-Интерфейс спроектирован в эстетике киберспортивного игрового дашборда **ExitLag**: глубокая тёмная тема (`#0c0d12`), неоновые акценты (`#ef4444` Coral Red и `#10b981` Emerald Green), плавная навигация и наглядные метрики.
+**Claude Pulse** sends a tiny request ahead of time, say at 09:00. The window then resets by 14:00, so you start with a fresh limit. It also shows how much of your limits is left and explains what uses them up.
 
 ---
 
-## ✨ Ключевые возможности (Features)
+## ✨ Features
 
-### 📊 1. Живой парсер квот и 5-часового сессионного окна
-* **Авто-парсинг Claude CLI:** выполняет безопасный запрос `claude /usage` без расхода пользовательских рабочих токенов.
-* **5-часовое сессионное окно:** наглядный прогресс-бар, процент расхода и оставшегося запаса, таймер обратного отсчета до сброса лимита.
-* **Недельный лимит:** отслеживание суммарной недельной квоты по всем моделям и Fable, дата и точное время сброса (Europe/Moscow).
-* **Сводка профиля:** отображение текущего тарифного плана (`★ CLAUDE MAX`), авторизованного email и рабочей модели.
+### 📊 Real limits
+* Data comes from the official `claude /usage` command: 5-hour window, weekly limit and Fable usage, with exact reset times.
+* Polled in the background every 5 minutes (configurable) without using your limit.
+* When there is no data, the app says so instead of showing placeholders.
 
-### 🎛️ 2. Мастер-рубильник и фоновый демон
-* **ExitLag ON/OFF Switch:** верхний тумблер в шапке окна позволяет в один клик поставить фоновый планировщик на паузу или возобновить его.
-* **Сворачивание в системный трей:** программа бесшумно работает в фоновом режиме около системных часов.
-* **Single Instance Guard:** встроенная защита на уровне системного мьютекса ядра Windows (`Win32 Named Mutex`) — предотвращает случайный параллельный запуск дубликатов процесса. При повторном клике по ярлыку разворачивает уже активное окно.
+### 🎯 Smart ping: "fresh limit by 14:00"
+* Set **when** you need a full limit and the app pings 5 hours earlier.
+* For early targets (e.g. 03:30) the ping goes out the evening before.
+* The "exact time" and "every N hours" modes are still there.
 
-### ⏰ 3. Гибкий планировщик запусков (Scheduler)
-* **Режим фиксированного времени:** запуск в заданные часы каждый день (например, в `08:00`, `13:00`, `18:00`).
-* **Режим интервалов:** автоматический проверочный пинг каждые `N` часов (например, каждые 4.5 часа для непрерывной фиксации сессии).
-* **Календарь дней недели:** индивидуальный выбор активных дней (`Пн`–`Вс`).
-* **Интеллектуальный Countdown:** динамический бейдж `⏳ След. запуск: ЧЧ:ММ:СС` с авто-обновлением каждую секунду.
+### 🔔 Limit alerts
+* A Windows notification when the window or the week hits 80% and 95% (configurable).
+* **The tray icon changes color:** green → yellow → red, grey when there is no data.
 
-### 🧩 4. Профили и пресеты подключений
-* Быстрое переключение рабочих профилей в виде интерактивных карточек:
-  * ⚡ **Claude Code** (`claude -p "ок"`) — стандартный быстрый вызов.
-  * 🧠 **Claude Opus Ping** (`claude -p "ок" --model opus`) — фиксация окна для модели Claude 3 / 3.5 / 3.7 Opus (0 токенов расхода).
-  * 🚀 **Claude Sonnet** (`claude -p "ок" --model sonnet`) — экономный вызов для модели Sonnet.
-  * 🔔 **Claude (ping)** (`claude -p "ping"`) — легковесный фоновый пинг.
-  * 💻 **Cursor CLI** / **Aider** / **Пользовательская команда** — поддержка любого терминального AI-ассистента.
-* Удобный выбор рабочей директории проекта через проводник Windows.
-* Кнопка немедленной тестовой проверки `[⚡ Проверить сейчас]`.
+### 💡 Where your limits go
+* The "What's contributing to your limits usage" block from `/usage`, translated and paired with advice. Example: "82% of usage — with context over 150k → use /clear or /compact between tasks".
+* View the last 24 hours or 7 days.
 
-### 🛠️ 5. Системные твики Windows (System Tweaks)
-* **🖥️ Автозапуск с Windows:** автоматический тихий старт в системный трей при включении компьютера.
-* **⚡ Пробуждение ПК (Wake PC):** вывод компьютера из спящего режима по системному таймеру Windows для отправки запланированного пинга.
-* **🔔 Windows Notifications:** нативные всплывающие уведомления Windows Toast о сбросе квот и статусе сессий.
-* **🛡️ Скрытый режим консоли (Silent Mode):** выполнение консольных CLI-команд в фоновом потоке без мерцания черных окон `cmd.exe`.
-* **⏱️ Наверстывание пропущенных запусков:** мгновенный пинг при включении, если ПК был выключен во время назначенного расписания.
+### 🌐 English and Russian
+* Language follows Windows and can be switched on the fly in settings.
 
-### 💡 6. Адаптивные подсказки (DPI-Aware Tooltips)
-* Все кнопки, переключатели и метрики снабжены подробными подсказками на понятном языке.
-* Поддержка экранов любого разрешения (Full HD, 2K, 4K) с автоматическим масштабированием шрифтов (100%–250% DPI).
-* Архитектура **Zero-Lag Singleton**: подсказки никогда не залипают, не перегружают процессор и мгновенно скрываются при уходе курсора.
+### 🛠️ Windows integration
+* Tray, start with Windows, wake the PC for a ping, hidden console, single instance.
+* **Catch-up:** if the PC was off at ping time, the ping is sent after the app starts, but only if the limit window is closed at that moment.
+
+> ⚠️ Every ping is a real model request and uses a little of your limit. The **Claude Haiku** preset is the cheapest.
 
 ---
 
-## 🚀 Установка и быстрый старт (Installation)
+## 🚀 Install
 
-### Вариант 1. Запуск готового EXE (Рекомендуется)
-1. Перейдите в раздел [Releases](https://github.com/VvVampirevvV/ClaudePulse/releases) или папку `dist/`.
-2. Скачайте файл **`ClaudePulse.exe`**.
-3. Запустите программу — установка не требуется, приложение портативно и готово к работе!
+### Prebuilt EXE
+1. Download [`ClaudePulse.exe`](https://github.com/VvVampirevvV/ClaudePulse/raw/main/dist/ClaudePulse.exe) (also in the `dist/` folder).
+2. Run it, no installer needed. You need [Claude Code](https://docs.claude.com/claude-code) installed and signed in with a Pro or Max plan.
 
-### Вариант 2. Запуск из исходного кода (Python)
-Требуется **Python 3.10** или новее.
-
+### From source
+Requires Python 3.10+.
 ```bash
-# 1. Клонируйте репозиторий
 git clone https://github.com/VvVampirevvV/ClaudePulse.git
 cd ClaudePulse
-
-# 2. Установите зависимости
 pip install -r requirements.txt
-
-# 3. Запустите приложение
 python main.py
 ```
 
-### Сборка собственного бинарника (Build EXE):
+### Build the EXE
 ```bash
 python build.py
 ```
-Готовый исполняемый файл будет скомпилирован в папку `dist/ClaudePulse.exe`.
+The file lands in `dist/ClaudePulse.exe`.
+
+### Tests
+```bash
+python -m unittest discover tests
+```
+
+Settings live in `%APPDATA%\ClaudePulse\config.json`. Set the `CLAUDEPULSE_HOME` environment variable to use another folder, e.g. for a second profile.
 
 ---
 
-## 🛠️ Стек технологий (Tech Stack)
+## 👤 Author
 
-| Компонент | Технология | Назначение |
-| :--- | :--- | :--- |
-| **Язык** | Python 3.10+ (совместим с 3.14) | Основная логика приложения |
-| **GUI Framework** | CustomTkinter | Современный тёмный векторный интерфейс |
-| **Системный трей** | pystray & Pillow | Интеграция в область уведомлений Windows |
-| **Планировщик** | Custom Threaded Scheduler | Точный фоновый тайминг с поддержкой сна ПК |
-| **Системная интеграция** | Windows Win32 API (`ctypes`) | Mutex, DPI-Awareness, управление окнами |
-| **Уведомления** | Windows Toast API | Нативные всплывающие карточки Windows 10/11 |
-| **Компиляция** | PyInstaller | Сборка в один независимый `.exe` |
+**Vv.Vampire.vV** ([@VvVampirevvV](https://github.com/VvVampirevvV))
 
----
+## 📄 License
 
-## 📂 Структура проекта (Project Structure)
-
-```
-ClaudePulse/
-├── assets/                  # Иконки приложения (.ico)
-│   ├── icon.ico             # Стандартная иконка в стиле ExitLag Pulse
-│   └── icon_active.ico      # Иконка активного состояния
-├── src/
-│   ├── ui/
-│   │   ├── components.py    # Виджеты: квоты, карточки, метрики, ToolTip
-│   │   ├── main_window.py   # Главное окно, дашборд, сайдбар, страницы
-│   │   └── tray.py          # Логика системного трея Windows
-│   ├── autostart.py         # Реестр Windows (Run-ветка автозапуска)
-│   ├── claude_parser.py     # Парсер квот и лимитов из Claude Code CLI
-│   ├── config.py            # Управление конфигурацией (%APPDATA%\ClaudePulse)
-│   ├── notifications.py     # Windows Toast уведомления
-│   ├── runner.py            # Бесшумный запуск CLI команд без всплывающих окон
-│   ├── scheduler.py         # Многопоточный движок расписания и сна
-│   └── single_instance.py   # Защита от дубликатов через Win32 Named Mutex
-├── build.py                 # Скрипт автоматической компиляции PyInstaller
-├── ClaudePulse.spec         # Спецификация сборки PyInstaller
-├── requirements.txt         # Список зависимостей Python
-├── screenshot.png           # Скриншот интерфейса
-└── main.py                  # Главная точка входа
-```
-
----
-
-## ⚙️ Конфигурация (Configuration)
-
-Настройки программы автоматически сохраняются в формате JSON по пути:
-```
-%APPDATA%\ClaudePulse\config.json
-```
-Пример конфигурации:
-```json
-{
-  "master_enabled": true,
-  "mode": "fixed",
-  "times": ["08:00", "13:00", "18:00"],
-  "interval_hours": 4.5,
-  "days": ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
-  "active_preset": "Claude Opus Ping",
-  "command": "claude -p \"ок\" --model opus",
-  "working_dir": "C:\\Projects",
-  "wake_pc": false,
-  "autostart": false,
-  "notifications": true,
-  "hidden_console": true,
-  "catchup_missed": true,
-  "anthropic_sync": true
-}
-```
-
----
-
-## 👤 Автор (Author)
-
-* **Vv.Vampire.vV** ([@VvVampirevvV](https://github.com/VvVampirevvV))
-
----
-
-## 📄 Лицензия (License)
-
-Проект распространяется под открытой лицензией [MIT License](LICENSE).
-Вы можете свободно использовать, модифицировать и распространять данный код.
+[MIT](LICENSE)
