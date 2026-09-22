@@ -568,50 +568,125 @@ class ConnectionTile(ctk.CTkFrame):
         self.configure(border_color="#ef4444" if active else "#212330")
 
 
-class SessionStatsCard(ctk.CTkFrame):
-    """Результат последнего пинга и кнопка «пинг сейчас»."""
-    def __init__(self, master, on_run_now=None, **kwargs):
-        super().__init__(master, fg_color="#14151d", border_width=1, border_color="#212330", corner_radius=10, **kwargs)
-        top_row = ctk.CTkFrame(self, fg_color="transparent")
-        top_row.pack(fill="x", padx=14, pady=(12, 6))
-        ctk.CTkLabel(top_row, text="⚡", font=("Segoe UI Emoji", 14), text_color="#ef4444").pack(side="left", padx=(0, 6))
-        ctk.CTkLabel(top_row, text=t("stats.title"), font=("Inter", 13, "bold"), text_color="#f4f4f5").pack(side="left")
+class NextPingCard(ctk.CTkFrame):
+    """Главный блок справа: когда следующий пинг, что он даст, и результат прошлого."""
+    ACCENT_BORDER = "#065f46"
 
-        stats_frame = ctk.CTkFrame(self, fg_color="#0f1016", corner_radius=8)
-        stats_frame.pack(fill="x", padx=14, pady=(4, 10))
-        self.stat_labels = {}
-        for key in ("when", "result", "duration", "next"):
-            cell = ctk.CTkFrame(stats_frame, fg_color="transparent")
-            cell.pack(side="left", fill="both", expand=True, padx=8, pady=8)
-            head = ctk.CTkLabel(cell, text=t(f"stats.{key}"), font=("Inter", 10), text_color=GREY_TEXT)
-            head.pack(anchor="w")
-            lbl = ctk.CTkLabel(cell, text="—", font=("Consolas", 12, "bold"), text_color="#f4f4f5")
-            lbl.pack(anchor="w")
-            self.stat_labels[key] = lbl
-            ToolTip(head, t(f"stats.{key}.tip"))
+    def __init__(self, master, on_run_now=None, on_skip_today=None, on_resume=None, **kwargs):
+        super().__init__(master, fg_color="#101a17", border_width=2, border_color=self.ACCENT_BORDER,
+                         corner_radius=12, **kwargs)
+        self.on_skip_today = on_skip_today
+        self.on_resume = on_resume
 
-        btn_row = ctk.CTkFrame(self, fg_color="transparent")
-        btn_row.pack(fill="x", padx=14, pady=(0, 10))
-        self.cmd_lbl = ctk.CTkLabel(btn_row, text="", font=("Consolas", 11), text_color=GREY_TEXT)
-        self.cmd_lbl.pack(side="left")
+        head = ctk.CTkFrame(self, fg_color="transparent")
+        head.pack(fill="x", padx=16, pady=(14, 0))
+        ctk.CTkLabel(head, text=t("np.title"), font=("Inter", 12, "bold"), text_color=GREEN_TEXT).pack(side="left")
+        self.chip = ctk.CTkLabel(head, text="", font=("Inter", 10, "bold"), corner_radius=6, padx=8, pady=1,
+                                 fg_color="#064e3b", text_color=GREEN_TEXT)
+        self.chip.pack(side="right")
+
+        big = ctk.CTkFrame(self, fg_color="transparent")
+        big.pack(fill="x", padx=16, pady=(2, 0))
+        self.time_lbl = ctk.CTkLabel(big, text="—", font=("Consolas", 46, "bold"), text_color=GREEN_TEXT)
+        self.time_lbl.pack(side="left")
+        right = ctk.CTkFrame(big, fg_color="transparent")
+        right.pack(side="left", padx=(14, 0), pady=(10, 0), anchor="s")
+        self.day_lbl = ctk.CTkLabel(right, text="", font=("Inter", 12, "bold"), text_color="#e4e4e7", anchor="w")
+        self.day_lbl.pack(anchor="w")
+        self.countdown_lbl = ctk.CTkLabel(right, text="", font=("Consolas", 15, "bold"), text_color=AMBER_TEXT, anchor="w")
+        self.countdown_lbl.pack(anchor="w")
+
+        self.detail_lbl = ctk.CTkLabel(self, text="", font=("Inter", 12), text_color="#d4d4d8",
+                                       justify="left", anchor="w", wraplength=380)
+        self.detail_lbl.pack(fill="x", padx=16, pady=(2, 10))
+
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(fill="x", padx=16, pady=(0, 10))
         if on_run_now:
-            self.run_btn = ctk.CTkButton(
-                btn_row, text=t("btn.ping_now"), font=("Inter", 11, "bold"), fg_color="#ef4444",
-                hover_color="#dc2626", text_color="#ffffff", height=28, corner_radius=6, command=on_run_now
-            )
-            self.run_btn.pack(side="right")
+            self.run_btn = ctk.CTkButton(btns, text=t("btn.ping_now"), font=("Inter", 12, "bold"), fg_color="#ef4444",
+                                         hover_color="#dc2626", text_color="#ffffff", height=32, corner_radius=8,
+                                         command=on_run_now)
+            self.run_btn.pack(side="left")
             ToolTip(self.run_btn, t("btn.ping_now.tip"))
+        self.skip_btn = ctk.CTkButton(btns, text="", font=("Inter", 12, "bold"), fg_color="#181924",
+                                      hover_color="#272938", border_width=1, border_color="#2e3244",
+                                      text_color="#e4e4e7", height=32, corner_radius=8, command=self._on_skip)
+        self.skip_btn.pack(side="left", padx=(8, 0))
+        self._paused = False
 
-    def update_stats(self, stats: Dict[str, Any], next_clock: str, command: str):
-        ts = stats.get("timestamp") or 0
-        code = stats.get("exit_code")
-        if ts:
-            self.stat_labels["when"].configure(text=datetime.datetime.fromtimestamp(ts).strftime("%H:%M"))
-            self.stat_labels["duration"].configure(text=t("stats.sec", s=f"{stats.get('duration', 0.0):.1f}"))
-            ok = code == 0
-            self.stat_labels["result"].configure(
-                text=t("stats.ok") if ok else t("stats.err", code=code), text_color=GREEN if ok else RED)
+        ctk.CTkFrame(self, fg_color="#1f2a27", height=1).pack(fill="x", padx=16, pady=(4, 8))
+        last = ctk.CTkFrame(self, fg_color="transparent")
+        last.pack(fill="x", padx=16, pady=(0, 12))
+        self.last_lbl = ctk.CTkLabel(last, text="", font=("Inter", 11), text_color="#a1a1aa", anchor="w")
+        self.last_lbl.pack(anchor="w")
+        self.cmd_lbl = ctk.CTkLabel(last, text="", font=("Consolas", 11), text_color=GREY_TEXT, anchor="w")
+        self.cmd_lbl.pack(anchor="w")
+        ToolTip(self.last_lbl, t("stats.result.tip"))
+
+    def _on_skip(self):
+        if self._paused:
+            if self.on_resume:
+                self.on_resume()
+        elif self.on_skip_today:
+            self.on_skip_today()
+
+    def _chip(self, key: str, fg: str, color: str):
+        self.chip.configure(text=t(key), fg_color=fg, text_color=color)
+
+    def update_state(self, info: Dict[str, Any], stats: Dict[str, Any], command: str):
+        from src.usage_monitor import format_duration
+        state = info.get("state")
+        self._paused = state == "paused"
+        self.skip_btn.configure(text=t("np.resume") if self._paused else t("np.skip_today"))
+        border = self.ACCENT_BORDER
+
+        if state == "scheduled":
+            at: datetime.datetime = info["at"]
+            self.time_lbl.configure(text=at.strftime("%H:%M"), text_color=GREEN_TEXT)
+            delta_days = (at.date() - datetime.date.today()).days
+            day = t("np.today") if delta_days == 0 else t("np.tomorrow") if delta_days == 1 else \
+                f"{at.day} {t(f'month.{at.month}')}"
+            self.day_lbl.configure(text=day)
+            self.countdown_lbl.configure(text=t("np.in", time=format_duration(info["remaining"])))
+            fresh = info["fresh_at"].strftime("%H:%M")
+            if info.get("will_defer_to"):
+                moved = info["will_defer_to"].strftime("%H:%M")
+                self.detail_lbl.configure(text=t("np.will_defer", at=moved, fresh=fresh), text_color=AMBER_TEXT)
+                self._chip("np.chip.will_defer", "#422006", AMBER_TEXT)
+            elif info.get("deferred"):
+                self.detail_lbl.configure(text=t("np.deferred", fresh=fresh), text_color=AMBER_TEXT)
+                self._chip("np.chip.deferred", "#422006", AMBER_TEXT)
+            else:
+                self.detail_lbl.configure(text=t("np.fresh_at", fresh=fresh), text_color="#d4d4d8")
+                self._chip("np.chip.scheduled", "#064e3b", GREEN_TEXT)
+        elif state == "paused":
+            until: datetime.datetime = info["until"]
+            self.time_lbl.configure(text=t("np.paused_big"), text_color=AMBER_TEXT)
+            self.day_lbl.configure(text="")
+            self.countdown_lbl.configure(text="")
+            when = until.strftime("%H:%M")
+            if until.date() > datetime.date.today():
+                when = f"{t('np.tomorrow')}, {when}"
+            self.detail_lbl.configure(text=t("np.paused", time=when), text_color=AMBER_TEXT)
+            self._chip("np.chip.paused", "#422006", AMBER_TEXT)
+            border = "#78350f"
         else:
-            self.stat_labels["result"].configure(text=t("stats.none"), text_color=GREY_TEXT)
-        self.stat_labels["next"].configure(text=next_clock)
+            self.time_lbl.configure(text="—", text_color=GREY_TEXT)
+            self.day_lbl.configure(text="")
+            self.countdown_lbl.configure(text="")
+            self.detail_lbl.configure(text=t("np.off" if state == "off" else "np.none"), text_color="#a1a1aa")
+            self._chip("np.chip.off", "#27272a", "#a1a1aa")
+            border = "#27272a"
+        self.configure(border_color=border)
+        self.skip_btn.configure(state="normal" if state in ("scheduled", "paused") else "disabled")
+
+        ts = stats.get("timestamp") or 0
+        if ts:
+            code = stats.get("exit_code")
+            result = t("stats.ok") if code == 0 else t("stats.err", code=code)
+            self.last_lbl.configure(text=t("np.last", time=datetime.datetime.fromtimestamp(ts).strftime("%H:%M"),
+                                           result=result, dur=f"{stats.get('duration', 0.0):.1f}"),
+                                    text_color="#a1a1aa" if code == 0 else RED_TEXT)
+        else:
+            self.last_lbl.configure(text=t("np.last_none"), text_color=GREY_TEXT)
         self.cmd_lbl.configure(text=command[:60])

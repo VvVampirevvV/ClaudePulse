@@ -1,7 +1,11 @@
 """Проверки логики без интерфейса: python -m unittest discover tests"""
 import os
 import sys
+import tempfile
 import unittest
+
+# Тесты не должны трогать настоящие настройки пользователя
+os.environ["CLAUDEPULSE_HOME"] = tempfile.mkdtemp(prefix="claudepulse-test-")
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -132,6 +136,91 @@ class I18nTest(unittest.TestCase):
         set_lang("ru")
         self.assertEqual(t("btn.save"), "💾 Сохранить")
         self.assertEqual(t("quota.left", time="01:00:00"), "осталось 01:00:00")
+
+
+class UpdaterTest(unittest.TestCase):
+    def test_versions(self):
+        from src.updater import parse_version, is_newer
+        self.assertEqual(parse_version("v3.2"), (3, 2))
+        self.assertEqual(parse_version("3.2.0"), (3, 2))
+        self.assertEqual(parse_version("3.0 VER WORK"), (3,))
+        self.assertTrue(is_newer("v3.2", "3.1"))
+        self.assertTrue(is_newer("v3.10", "3.9"))
+        self.assertFalse(is_newer("v3.2", "3.2"))
+        self.assertFalse(is_newer("v3.1.9", "3.2"))
+        self.assertFalse(is_newer("nightly", "3.2"))
+
+
+class IpcTest(unittest.TestCase):
+    def test_argv(self):
+        from src.ipc import parse_argv
+        self.assertEqual(parse_argv(["exe", "claudepulse:pause2h"]), "pause2h")
+        self.assertEqual(parse_argv(["exe", "claudepulse://pause_today/"]), "pause_today")
+        self.assertEqual(parse_argv(["exe", "claudepulse:rm -rf"]), "open")
+        self.assertIsNone(parse_argv(["exe"]))
+
+    def test_roundtrip(self):
+        from src import ipc
+        ipc.take()
+        ipc.send("pause2h")
+        ipc.send("bogus")
+        ipc.send("open")
+        self.assertEqual(ipc.take(), ["pause2h", "open"])
+        self.assertEqual(ipc.take(), [])
+
+
+class DeferTest(unittest.TestCase):
+    """Пинг по расписанию в открытое окно не уходит, а переезжает на минуту после сброса."""
+
+    def make(self, reset_in_min=None, skip=True):
+        from src.scheduler import SchedulerManager
+        from src.config import DEFAULT_CONFIG
+        sch = SchedulerManager()
+        cfg = dict(DEFAULT_CONFIG, master_enabled=True, mode="fixed", times=["05:00"], skip_if_open=skip)
+        sch.set_config(cfg)
+        now = datetime.now().astimezone()
+        if reset_in_min is not None:
+            sch.usage.snapshot = {"session_pct": 40, "session_reset": now + timedelta(minutes=reset_in_min),
+                                  "weekly_pct": 10, "weekly_reset": None, "fable_pct": None, "tips": []}
+        self.ran = []
+        sch._execute_job = lambda: self.ran.append(True)
+        return sch, now
+
+    def test_open_window_defers(self):
+        sch, now = self.make(reset_in_min=30)
+        sch._job()
+        self.assertEqual(self.ran, [])
+        self.assertAlmostEqual(sch.deferred_at, (now + timedelta(minutes=31)).timestamp(), delta=2)
+        info = sch.next_ping_info()
+        self.assertTrue(info["deferred"])
+
+    def test_closed_window_pings(self):
+        sch, _ = self.make(reset_in_min=None)
+        sch._job()
+        self.assertEqual(self.ran, [True])
+        self.assertIsNone(sch.deferred_at)
+
+    def test_setting_off_pings_anyway(self):
+        sch, _ = self.make(reset_in_min=30, skip=False)
+        sch._job()
+        self.assertEqual(self.ran, [True])
+
+    def test_deferred_run_clears_state(self):
+        sch, _ = self.make(reset_in_min=None)
+        sch._set_state("deferred_at", 1.0)
+        sch._job("deferred")
+        self.assertIsNone(sch.deferred_at)
+        self.assertEqual(self.ran, [True])
+
+    def test_pause_today(self):
+        sch, _ = self.make()
+        sch.pause_today()
+        self.assertEqual(sch.next_ping_info()["state"], "paused")
+        self.assertEqual(datetime.fromtimestamp(sch.paused_until).hour, 0)
+        sch._job()
+        self.assertEqual(self.ran, [])
+        sch.resume()
+        self.assertEqual(sch.next_ping_info()["state"], "scheduled")
 
 
 if __name__ == "__main__":

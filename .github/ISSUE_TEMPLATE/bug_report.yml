@@ -1,0 +1,48 @@
+name: Bug report / Ошибка
+description: Something doesn't work as expected / Что-то работает не так
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Please don't paste your e-mail, tokens or passwords.
+        Спасибо! Пожалуйста, не вставляйте почту, токены и пароли.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / Что случилось?
+      description: What did you expect, and what happened instead? / Что ожидали и что получилось?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Как повторить
+      placeholder: |
+        1. Open the Schedule page
+        2. ...
+  - type: textarea
+    id: log
+    attributes:
+      label: Log / Журнал
+      description: |
+        Journal page → "Log file", or %APPDATA%\ClaudePulse\logs\claudepulse.log. Paste the lines around the problem.
+        Страница «Журнал» → «Файл журнала». Вставьте строки вокруг проблемы.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Claude Pulse version / Версия
+      placeholder: "3.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows
+      options: ["Windows 11", "Windows 10", "Other / Другая"]
+  - type: dropdown
+    id: plan
+    attributes:
+      label: Claude plan / Подписка
+      options: ["Max", "Pro", "Team / Enterprise", "API key / API-ключ"]

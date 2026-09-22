@@ -1,5 +1,6 @@
 import time
 import threading
+import webbrowser
 from typing import Callable, Optional
 
 import pystray
@@ -81,6 +82,11 @@ class TrayManager:
                 lambda item: t("tray.resume") if s.paused_until else t("tray.pause2h"),
                 lambda: s.resume() if s.paused_until else s.pause(2.0)
             ),
+            pystray.MenuItem(lambda item: t("tray.pause_today"), lambda: s.pause_today(),
+                             visible=lambda item: not s.paused_until),
+            pystray.MenuItem(lambda item: t("tray.update", version=s.updates.latest or ""),
+                             lambda: webbrowser.open(s.updates.url),
+                             visible=lambda item: bool(s.updates.latest)),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(lambda item: t("tray.exit"), self.exit_callback)
         )
@@ -101,6 +107,7 @@ class TrayManager:
                     self.icon.icon = make_icon(level)
                 title = f"Claude Pulse\n{self._quota_line()}\n{t('tray.next', next=self.scheduler.get_next_run())}"
                 self.icon.title = title[:127]  # ограничение Windows NotifyIcon
+                self.icon.update_menu()  # пересобрать пункты: пауза, обновление, текст с процентами
             except Exception:
                 pass
             time.sleep(5)

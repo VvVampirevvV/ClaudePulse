@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 APP_NAME = "ClaudePulse"
-APP_VERSION = "3.1"
+APP_VERSION = "3.2"
 APPDATA_DIR = Path(os.getenv('CLAUDEPULSE_HOME') or (Path(os.getenv('APPDATA', '')) / APP_NAME))
 CONFIG_FILE = APPDATA_DIR / "config.json"
 
@@ -42,7 +42,11 @@ DEFAULT_CONFIG = {
     "usage_poll_minutes": 5,
     "timeout_seconds": 45,
     "language": "",  # "" = как в Windows
+    "skip_if_open": True,
+    "check_updates": True,
     "last_job_at": 0.0,
+    "paused_until": 0.0,
+    "deferred_at": 0.0,
 }
 
 # Ключи, которые больше не используются (удаляются при загрузке)

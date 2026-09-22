@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚡ Claude Pulse 3.1
+# ⚡ Claude Pulse
 
 **Your Claude Code limits on the desktop — and the 5-hour window opened on schedule**
 
@@ -40,6 +40,10 @@ Claude Pro and Max limits work in 5-hour windows: a window opens with your first
 * For early targets (e.g. 03:30) the ping goes out the evening before.
 * The "exact time" and "every N hours" modes are still there.
 
+### 💰 No wasted pings
+* A scheduled ping that would land in an already open window is skipped — it would only use your limit. The app pings right after that window resets.
+* The **Next ping** card shows when it goes out, the countdown and when you get a fresh limit; **Skip today** pauses pings until midnight.
+
 ### 🔔 Limit alerts
 * A Windows notification when the window or the week hits 80% and 95% (configurable).
 * **The tray icon changes color:** green → yellow → red, grey when there is no data.
@@ -53,6 +57,9 @@ Claude Pro and Max limits work in 5-hour windows: a window opens with your first
 
 ### 🛠️ Windows integration
 * Tray, start with Windows, wake the PC for a ping, hidden console, single instance.
+* Click a notification to open the app; ping notifications have a **Pause for 2 hours** button.
+* Daily update check against GitHub releases (one anonymous request, can be turned off).
+* The journal is saved to `%APPDATA%\ClaudePulse\logs\claudepulse.log`.
 * **Catch-up:** if the PC was off at ping time, the ping is sent after the app starts, but only if the limit window is closed at that moment.
 
 > ⚠️ Every ping is a real model request and uses a little of your limit. The **Claude Haiku** preset is the cheapest.

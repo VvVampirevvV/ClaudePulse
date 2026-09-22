@@ -1,5 +1,6 @@
 import os
 import datetime
+import webbrowser
 from tkinter import filedialog
 from typing import List
 
@@ -9,8 +10,9 @@ from src.config import CLI_PRESETS, APP_VERSION, DAY_CODES
 from src.autostart import set_autostart, check_autostart
 from src.scheduler import parse_hhmm, ping_time_for_target
 from src.i18n import t, set_lang, get_lang, LANGUAGES
+from src import applog, ipc
 from src.ui.components import (ConsoleLog, QuotaWidget, FeatureCard, ConnectionTile,
-                               SessionStatsCard, TipsCard, ToolTip)
+                               NextPingCard, TipsCard, ToolTip)
 
 # ExitLag-inspired Dark Theme Palette
 BG_COLOR = "#0c0d12"
@@ -62,7 +64,7 @@ class MainWindow(ctk.CTk):
         self.configure(fg_color=BG_COLOR)
         self.protocol("WM_DELETE_WINDOW", self.on_close_callback)
 
-        self.scheduler.set_log_callback(self.log)
+        self.scheduler.set_log_callback(self._display_log)
         self._build_all()
         self._switch_page("home")
         self._start_timer_updater()
@@ -87,6 +89,8 @@ class MainWindow(ctk.CTk):
         self.hidden_var = ctk.BooleanVar(value=True)
         self.catchup_var = ctk.BooleanVar(value=True)
         self.alerts_var = ctk.BooleanVar(value=True)
+        self.skip_open_var = ctk.BooleanVar(value=True)
+        self.updates_var = ctk.BooleanVar(value=True)
 
         self.root_container = ctk.CTkFrame(self, fg_color="transparent")
         self.root_container.pack(fill="both", expand=True)
@@ -163,6 +167,11 @@ class MainWindow(ctk.CTk):
 
         right_btns = ctk.CTkFrame(self.header_bar, fg_color="transparent")
         right_btns.pack(side="right", padx=16)
+        self.update_btn = ctk.CTkButton(right_btns, text="", font=("Inter", 11, "bold"), height=30,
+                                        fg_color=CORAL_COLOR, hover_color=DANGER_HOVER, text_color="#ffffff",
+                                        corner_radius=6, command=self._open_update)
+        ToolTip(self.update_btn, t("update.tip"))
+        self._update_anchor = right_btns
         btn_refresh = _small_button(right_btns, t("btn.refresh_quotas"), self._refresh_quotas, height=30,
                                     text_color="#e4e4e7", corner_radius=6)
         btn_refresh.pack(side="left", padx=(0, 8))
@@ -238,8 +247,9 @@ class MainWindow(ctk.CTk):
         self.quota_widget = QuotaWidget(dash_row, on_refresh=self.scheduler.refresh_live_quota, fg_color=CARD_COLOR,
                                         corner_radius=12, border_width=1, border_color=BORDER_COLOR)
         self.quota_widget.grid(row=0, column=0, padx=(0, 8), sticky="nsew")
-        self.session_stats_card = SessionStatsCard(dash_row, on_run_now=self._run_test)
-        self.session_stats_card.grid(row=0, column=1, padx=(8, 0), sticky="nsew")
+        self.next_ping_card = NextPingCard(dash_row, on_run_now=self._run_test,
+                                           on_skip_today=self.scheduler.pause_today, on_resume=self.scheduler.resume)
+        self.next_ping_card.grid(row=0, column=1, padx=(8, 0), sticky="nsew")
 
         self.tips_card = TipsCard(page)
         self.tips_card.pack(fill="x", pady=(0, 14))
@@ -435,12 +445,14 @@ class MainWindow(ctk.CTk):
         grid_frame.pack(fill="x", pady=(0, 14))
         grid_frame.grid_columnconfigure((0, 1), weight=1, uniform="feat")
         features = [
+            ("💰", "feat.skip_open", self.skip_open_var, None),
             ("🔔", "feat.alerts", self.alerts_var, None),
             ("💬", "feat.notify", self.notify_var, None),
             ("🖥️", "feat.autostart", self.auto_var, self._toggle_autostart),
             ("⏱️", "feat.catchup", self.catchup_var, None),
             ("⚡", "feat.wake", self.wake_var, None),
             ("🛡️", "feat.hidden", self.hidden_var, None),
+            ("⬆️", "feat.updates", self.updates_var, None),
         ]
         for idx, (icon, key, var, cmd) in enumerate(features):
             card = FeatureCard(grid_frame, icon=icon, title=t(key), description=t(f"{key}.desc"), variable=var,
@@ -485,6 +497,9 @@ class MainWindow(ctk.CTk):
         ctk.CTkLabel(header, text=t("logs.title"), font=("Inter", 18, "bold"), text_color=TEXT_COLOR).pack(side="left")
         _small_button(header, t("btn.copy"), self._copy_log, width=90).pack(side="right", padx=(6, 0))
         _small_button(header, t("btn.clear"), self._clear_log, width=80).pack(side="right")
+        folder_btn = _small_button(header, t("btn.log_folder"), self._open_log_folder, width=110)
+        folder_btn.pack(side="right", padx=(0, 6))
+        ToolTip(folder_btn, t("btn.log_folder.tip", path=str(applog.LOG_FILE)))
         self.console = ConsoleLog(page, fg_color=CARD_COLOR, border_width=1, border_color=BORDER_COLOR)
         self.console.pack(fill="both", expand=True)
         for ts, message, tag in self._log_buffer:
@@ -568,6 +583,8 @@ class MainWindow(ctk.CTk):
         self.hidden_var.set(config.get("hidden_console", True))
         self.catchup_var.set(config.get("catch_up_missed", True))
         self.alerts_var.set(config.get("alerts_enabled", True))
+        self.skip_open_var.set(config.get("skip_if_open", True))
+        self.updates_var.set(config.get("check_updates", True))
         self.levels_entry.delete(0, "end")
         self.levels_entry.insert(0, ", ".join(str(x) for x in config.get("alert_levels", [80, 95])))
         self.poll_entry.delete(0, "end")
@@ -622,6 +639,8 @@ class MainWindow(ctk.CTk):
             "notify": self.notify_var.get(),
             "catch_up_missed": self.catchup_var.get(),
             "alerts_enabled": self.alerts_var.get(),
+            "skip_if_open": self.skip_open_var.get(),
+            "check_updates": self.updates_var.get(),
             "alert_levels": levels,
             "usage_poll_minutes": poll,
         })
@@ -633,6 +652,11 @@ class MainWindow(ctk.CTk):
         self.scheduler.run_now()
 
     def log(self, message: str, tag: str = "normal"):
+        """Сообщения самого окна: в файл журнала и на экран."""
+        applog.write(message, tag)
+        self._display_log(message, tag)
+
+    def _display_log(self, message: str, tag: str = "normal"):
         ts = datetime.datetime.now().strftime("%H:%M:%S")
 
         def _write():
@@ -650,9 +674,12 @@ class MainWindow(ctk.CTk):
                 self.next_run_pill.configure(text=t("next.pill", next=self.scheduler.get_next_run()))
                 q = self.scheduler.get_quota_status()
                 self.quota_widget.update_status(q)
-                self.session_stats_card.update_stats(self.scheduler.get_last_run_stats(),
-                                                     self.scheduler.next_run_clock(),
-                                                     self.scheduler.config.get("command", ""))
+                self.next_ping_card.update_state(self.scheduler.next_ping_info(),
+                                                 self.scheduler.get_last_run_stats(),
+                                                 self.scheduler.config.get("command", ""))
+                self._update_banner()
+                for command in ipc.take():
+                    self.handle_command(command)
                 self.tips_card.update_tips(q.get("tips"))
                 if self.mode_var.get() == "target":
                     self._update_target_preview()
@@ -660,3 +687,47 @@ class MainWindow(ctk.CTk):
                 pass
             self.after(1000, update)
         self.after(300, update)
+
+    # ----------------------------------------------------
+    # Обновления, журнал, команды из уведомлений
+    # ----------------------------------------------------
+    def _update_banner(self):
+        latest = self.scheduler.updates.latest
+        if latest:
+            text = t("update.available", version=latest)
+            if self.update_btn.cget("text") != text:
+                self.update_btn.configure(text=text)
+            if not self.update_btn.winfo_ismapped():
+                self.update_btn.pack(side="left", padx=(0, 8), before=self._update_anchor.winfo_children()[1])
+        elif self.update_btn.winfo_ismapped():
+            self.update_btn.pack_forget()
+
+    def _open_update(self):
+        webbrowser.open(self.scheduler.updates.url)
+
+    def _open_log_folder(self):
+        try:
+            applog.LOG_DIR.mkdir(parents=True, exist_ok=True)
+            os.startfile(applog.LOG_DIR)
+        except OSError as e:
+            self.log(str(e), "error")
+
+    def show(self):
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+    def handle_command(self, command: str):
+        """Команда из клика по уведомлению или из второго запуска программы."""
+        if command == "open":
+            self.show()
+        elif command == "pause2h":
+            self.scheduler.pause(2.0)
+        elif command == "pause_today":
+            self.scheduler.pause_today()
+        elif command == "resume":
+            self.scheduler.resume()
+        elif command == "ping":
+            self.scheduler.run_now()
+        elif command == "update":
+            self._open_update()

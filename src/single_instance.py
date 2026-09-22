@@ -14,7 +14,7 @@ SW_RESTORE = 9
 
 _single_instance_mutex = None
 
-def ensure_single_instance(window_title: str = "Claude Pulse") -> bool:
+def ensure_single_instance(window_title: str = "Claude Pulse", restore: bool = True) -> bool:
     """
     Гарантирует запуск только одной копии приложения (Single Instance).
     
@@ -68,7 +68,7 @@ def ensure_single_instance(window_title: str = "Claude Pulse") -> bool:
                 except Exception:
                     pass
 
-            if hwnd:
+            if hwnd and restore:
                 try:
                     # Разворачиваем окно из трея / свернутого состояния и выводим на передний план
                     user32.ShowWindow(hwnd, SW_RESTORE)

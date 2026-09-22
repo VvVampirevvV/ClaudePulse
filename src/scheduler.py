@@ -9,10 +9,15 @@ from src.runner import run_command
 from src.config import save_config, DAY_CODES, QUOTA_WINDOW_HOURS
 from src.claude_parser import parse_rate_limit_reset_time
 from src.usage_monitor import UsageMonitor
+from src.updater import UpdateChecker
+from src.notifications import PROTOCOL
 from src.i18n import t
+from src import applog
 
 CATCH_UP_DELAY = 45          # сек после старта: даём /usage прийти, чтобы не пинговать в открытое окно
 CATCH_UP_LOOKBACK_HOURS = 24
+DEFER_AFTER_RESET = 60       # отложенный пинг — через минуту после сброса открытого окна
+SLEEP_GAP = 90               # цикл простоял дольше — значит, ПК спал
 
 _WEEKDAY_JOBS = [
     lambda s: s.monday, lambda s: s.tuesday, lambda s: s.wednesday, lambda s: s.thursday,
@@ -75,14 +80,15 @@ class SchedulerManager:
         self.thread = None
         self.config: Dict[str, Any] = {}
         self.log_callback: Optional[Callable[[str, str], None]] = None
-        self.notification_callback: Optional[Callable[[str, str], None]] = None
-        self.paused_until: Optional[float] = None
+        self.notification_callback: Optional[Callable[..., None]] = None
         self.wake_timer = None
         self.forced_reset_time: Optional[str] = None
         self.job_running = False
         self.usage = UsageMonitor(lambda: self.config)
         self.usage.log = self._log
         self.usage.on_update(self._on_usage_update)
+        self.updates = UpdateChecker(lambda: self.config, self.save)
+        self.updates.log = self._log
         self.last_run_stats: Dict[str, Any] = {"timestamp": 0.0, "duration": 0.0, "exit_code": None, "command": ""}
 
     # ---------- конфиг ----------
@@ -105,27 +111,51 @@ class SchedulerManager:
         return self.last_run_stats
 
     def set_log_callback(self, callback: Callable):
+        """callback только показывает строку в окне; в файл журнала пишет сам планировщик."""
         self.log_callback = callback
 
     def set_notification_callback(self, callback: Callable):
         self.notification_callback = callback
         self.usage.notify = self._notify
+        self.updates.notify = lambda title, body: self._notify(
+            title, body, launch=self.updates.url, actions=[(t("toast.btn.download"), self.updates.url)])
 
     def _log(self, message: str, tag: str = "normal"):
+        applog.write(message, tag)
         if self.log_callback:
             self.log_callback(message, tag)
 
-    def _notify(self, title: str, message: str):
+    def _notify(self, title: str, message: str, launch: Optional[str] = None, actions=None):
         if self.config.get("notify", True) and self.notification_callback:
-            self.notification_callback(title, message)
+            self.notification_callback(title, message, launch or f"{PROTOCOL}:open", actions)
 
-    # ---------- пауза ----------
+    # ---------- пауза и отложенный пинг (хранятся в конфиге — переживают перезапуск) ----------
+    @property
+    def paused_until(self) -> Optional[float]:
+        value = float(self.config.get("paused_until") or 0)
+        return value if value > time.time() else None
+
+    @property
+    def deferred_at(self) -> Optional[float]:
+        return float(self.config.get("deferred_at") or 0) or None
+
+    def _set_state(self, key: str, value: Optional[float]):
+        self.config[key] = value or 0
+        self.save()
+        if self.config.get("wake_pc", False):
+            self._set_wake_timer()
+
     def pause(self, hours: float):
-        self.paused_until = time.time() + (hours * 3600)
+        self._set_state("paused_until", time.time() + hours * 3600)
         self._log(t("log.paused", hours=hours), "warning")
 
+    def pause_today(self):
+        tomorrow = (datetime.now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        self._set_state("paused_until", tomorrow.timestamp())
+        self._log(t("log.paused_today"), "warning")
+
     def resume(self):
-        self.paused_until = None
+        self._set_state("paused_until", None)
         self._log(t("log.resumed"), "success")
 
     # ---------- квоты ----------
@@ -155,6 +185,7 @@ class SchedulerManager:
 
     # ---------- запуск команды ----------
     def run_now(self):
+        """Ручной пинг уходит всегда, даже в открытое окно: пользователь попросил сам."""
         self._log(t("log.manual_run", cmd=self.config.get('command', '')), "command")
         self._execute_job()
 
@@ -190,12 +221,15 @@ class SchedulerManager:
                     reset_at = ss["reset"].astimezone().strftime("%H:%M")
                 else:
                     reset_at = (datetime.now() + timedelta(hours=QUOTA_WINDOW_HOURS)).strftime("%H:%M")
-                self._notify(t("toast.ok.title"), t("toast.ok.body", when=reset_at))
+                self._notify(t("toast.ok.title"), t("toast.ok.body", when=reset_at),
+                             actions=[(t("toast.btn.pause2h"), f"{PROTOCOL}:pause2h")])
             else:
                 err = stderr.strip() or stdout.strip()
                 self._log(t("log.failure", code=exit_code, dur=duration, err=err), "warning" if reset_hint else "error")
                 if not reset_hint:
-                    self._notify(t("toast.fail.title"), t("toast.fail.body", code=exit_code, err=err[:100]))
+                    self._notify(t("toast.fail.title"), t("toast.fail.body", code=exit_code, err=err[:100]),
+                                 actions=[(t("toast.btn.open"), f"{PROTOCOL}:open"),
+                                          (t("toast.btn.pause2h"), f"{PROTOCOL}:pause2h")])
 
             self.last_run_stats = {
                 "timestamp": time.time(),
@@ -215,14 +249,25 @@ class SchedulerManager:
             timeout=float(self.config.get('timeout_seconds', 45)),
         )
 
-    def _job(self):
+    def _job(self, reason: str = "scheduled"):
+        """Пинг по расписанию, отложенный или наверстывание. Ручной пинг сюда не ходит."""
+        if reason == "deferred":
+            self._set_state("deferred_at", None)
         if not self.config.get("master_enabled", True):
             self._log(t("log.skipped_off"), "warning")
             return
-        if self.paused_until and time.time() < self.paused_until:
+        if self.paused_until:
             self._log(t("log.skipped_paused"), "warning")
             return
-        self._log(t("log.scheduled_run", cmd=self.config.get('command', '')), "command")
+        ss = self.usage.session_state()
+        if self.config.get("skip_if_open", True) and ss.get("active"):
+            # Пинг в открытое окно сброс не сдвигает и только тратит лимит — пингуем сразу после сброса
+            at = ss["reset"].timestamp() + DEFER_AFTER_RESET
+            self._set_state("deferred_at", at)
+            self._log(t("log.deferred", reset=ss["reset"].astimezone().strftime("%H:%M"),
+                        at=datetime.fromtimestamp(at).strftime("%H:%M")), "warning")
+            return
+        self._log(t(f"log.run_{reason}", cmd=self.config.get('command', '')), "command")
         self._execute_job()
         if self.config.get('wake_pc', False):
             self._set_wake_timer()
@@ -249,29 +294,58 @@ class SchedulerManager:
         if self.config.get('wake_pc', False):
             self._set_wake_timer()
 
-    def get_next_run(self) -> str:
-        if not self.config.get("master_enabled", True):
-            return t("next.off")
-        if self.paused_until and time.time() < self.paused_until:
-            rem = int(self.paused_until - time.time())
-            h, r = divmod(rem, 3600)
-            m, s = divmod(r, 60)
-            return t("next.paused", time=f"{h:02}:{m:02}:{s:02}")
-        next_run = schedule.next_run()
-        if not next_run:
-            return t("next.none")
-        diff = next_run - datetime.now()
-        if diff.total_seconds() < 0:
-            return t("next.now")
-        hours, remainder = divmod(int(diff.total_seconds()) % 86400, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        if diff.days > 0:
-            return t("next.days", d=diff.days, time=f"{hours:02}:{minutes:02}:{seconds:02}")
-        return f"{hours:02}:{minutes:02}:{seconds:02}"
+    def next_ping_info(self) -> Dict[str, Any]:
+        """Что и когда будет дальше — для блока «Следующий пинг», шапки и трея."""
+        if not self.is_master_enabled():
+            return {"state": "off"}
+        if self.paused_until:
+            return {"state": "paused", "until": datetime.fromtimestamp(self.paused_until)}
+        candidates = []
+        if self.deferred_at:
+            candidates.append((self.deferred_at, True))
+        nr = schedule.next_run()
+        if nr:
+            candidates.append((nr.timestamp(), False))
+        if not candidates:
+            return {"state": "none"}
+        at, deferred = min(candidates)
+        info = {
+            "state": "scheduled",
+            "at": datetime.fromtimestamp(at),
+            "remaining": max(0.0, at - time.time()),
+            "deferred": deferred,
+            "fresh_at": datetime.fromtimestamp(at + QUOTA_WINDOW_HOURS * 3600),
+            "will_defer_to": None,
+        }
+        # Окно будет ещё открыто в момент пинга — заранее покажем, куда пинг переедет
+        ss = self.usage.session_state()
+        if self.config.get("skip_if_open", True) and ss.get("active") and ss["reset"].timestamp() > at:
+            moved = ss["reset"].timestamp() + DEFER_AFTER_RESET
+            info["will_defer_to"] = datetime.fromtimestamp(moved)
+            info["fresh_at"] = datetime.fromtimestamp(moved + QUOTA_WINDOW_HOURS * 3600)
+        return info
 
-    def next_run_clock(self) -> str:
-        next_run = schedule.next_run()
-        return next_run.strftime("%H:%M") if next_run else "--:--"
+    def get_next_run(self) -> str:
+        info = self.next_ping_info()
+        state = info["state"]
+        if state == "off":
+            return t("next.off")
+        if state == "paused":
+            until = info["until"]
+            when = until.strftime("%H:%M")
+            if until.date() > datetime.now().date():
+                when = f"{t('np.tomorrow')}, {when}"
+            return t("next.paused_until", time=when)
+        if state == "none":
+            return t("next.none")
+        rem = int(info["remaining"])
+        if rem <= 0:
+            return t("next.now")
+        days, rem = divmod(rem, 86400)
+        h, r = divmod(rem, 3600)
+        m, s = divmod(r, 60)
+        clock = f"{h:02}:{m:02}:{s:02}"
+        return t("next.days", d=days, time=clock) if days else clock
 
     def _last_missed_slot(self, now: datetime) -> Optional[datetime]:
         """Последний запланированный запуск за последние сутки (для наверстывания)."""
@@ -296,20 +370,17 @@ class SchedulerManager:
         slot = self._last_missed_slot(now)
         if not slot or float(self.config.get("last_job_at", 0.0)) >= slot.timestamp():
             return
-        if self.usage.session_state().get("active"):
-            self._log(t("log.catchup_skip_open", slot=slot.strftime("%H:%M")), "normal")
-            self.config["last_job_at"] = time.time()
-            self.save()
-            return
-        self._log(t("log.catchup_run", slot=slot.strftime("%H:%M")), "command")
-        self._execute_job()
+        if self.deferred_at:
+            return  # уже ждём сброса открытого окна
+        self._log(t("log.catchup", slot=slot.strftime("%H:%M")), "command")
+        self._job("catchup")
 
     def _set_wake_timer(self):
-        next_run = schedule.next_run()
-        if not next_run:
+        info = self.next_ping_info()
+        if info["state"] != "scheduled":
             return
         try:
-            secs = max(1, int((next_run - datetime.now()).total_seconds()))
+            secs = max(1, int(info["remaining"]))
             due_time = ctypes.c_int64(-int(secs * 10_000_000))
             kernel32 = ctypes.windll.kernel32
             timer = kernel32.CreateWaitableTimerW(None, True, "ClaudePulseWakeTimer")
@@ -324,6 +395,7 @@ class SchedulerManager:
         if not self.running:
             self.running = True
             self.usage.start()
+            self.updates.start()
             _later(CATCH_UP_DELAY, self._check_catch_up)
             self.thread = threading.Thread(target=self._run_loop, daemon=True)
             self.thread.start()
@@ -331,10 +403,23 @@ class SchedulerManager:
     def stop(self):
         self.running = False
         self.usage.stop()
+        self.updates.stop()
         if self.thread:
             self.thread.join(timeout=1.0)
 
     def _run_loop(self):
+        last = time.time()
         while self.running:
+            now = time.time()
+            if now - last > SLEEP_GAP:
+                # Для разбора «почему ночью не пингнуло»: в журнале видно, когда ПК спал
+                self._log(t("log.slept", since=datetime.fromtimestamp(last).strftime("%H:%M"),
+                            until=datetime.fromtimestamp(now).strftime("%H:%M")), "normal")
+            last = now
+            if self.deferred_at and now >= self.deferred_at:
+                if now - self.deferred_at > QUOTA_WINDOW_HOURS * 3600:
+                    self._set_state("deferred_at", None)  # ПК был выключен — пинг давно неактуален
+                else:
+                    self._job("deferred")
             schedule.run_pending()
             time.sleep(1)

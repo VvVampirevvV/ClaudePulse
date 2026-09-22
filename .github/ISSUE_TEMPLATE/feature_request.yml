@@ -1,0 +1,21 @@
+name: Feature request / Предложение
+description: An idea to make Claude Pulse more useful / Идея, как сделать программу полезнее
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve? / Какую проблему решит?
+      description: Describe the situation, not only the solution. / Опишите ситуацию, а не только решение.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea / Ваша идея
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you handle it now? / Как справляетесь сейчас?
