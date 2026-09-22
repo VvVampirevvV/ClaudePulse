@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Single-instance check reads the Windows error code reliably (ctypes `use_last_error`).
+
 ## [3.1] — 2026-09-23
 
 **Download:** `ClaudePulse.exe` below. Requires [Claude Code](https://docs.claude.com/claude-code) signed in with a Pro or Max plan.

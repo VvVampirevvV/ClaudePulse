@@ -30,12 +30,17 @@ def ensure_single_instance(window_title: str = "Claude Pulse") -> bool:
     global _single_instance_mutex
 
     try:
-        kernel32 = ctypes.windll.kernel32
+        # use_last_error: ctypes сохраняет код ошибки сразу после вызова. Отдельный вызов
+        # kernel32.GetLastError() мог вернуть чужой устаревший 183 и «найти» несуществующую копию.
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateMutexW.restype = wintypes.HANDLE
+        kernel32.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
         user32 = ctypes.windll.user32
 
         # 1. Создаем глобальный именованный мьютекс Windows
+        ctypes.set_last_error(0)
         _single_instance_mutex = kernel32.CreateMutexW(None, False, MUTEX_NAME)
-        last_error = kernel32.GetLastError()
+        last_error = ctypes.get_last_error()
 
         if last_error == ERROR_ALREADY_EXISTS:
             # Экземпляр уже запущен! Ищем существующее окно
