@@ -9,7 +9,8 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=windows)](https://github.com/VvVampirevvV/ClaudePulse)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)](LICENSE)
-[![Download](https://img.shields.io/badge/Download-EXE%203.1-ef4444?style=for-the-badge)](https://github.com/VvVampirevvV/ClaudePulse/raw/main/dist/ClaudePulse.exe)
+[![Release](https://img.shields.io/github/v/release/VvVampirevvV/ClaudePulse?style=for-the-badge&color=ef4444&label=Download)](https://github.com/VvVampirevvV/ClaudePulse/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/VvVampirevvV/ClaudePulse/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/VvVampirevvV/ClaudePulse/actions)
 
 <p align="center">
   <img src="screenshot.png" alt="Claude Pulse" width="900" style="border-radius: 10px; border: 1px solid #3b3f54;" />
@@ -61,8 +62,9 @@ Claude Pro and Max limits work in 5-hour windows: a window opens with your first
 ## 🚀 Install
 
 ### Prebuilt EXE
-1. Download [`ClaudePulse.exe`](https://github.com/VvVampirevvV/ClaudePulse/raw/main/dist/ClaudePulse.exe) (also in the `dist/` folder).
+1. Download [`ClaudePulse.exe`](https://github.com/VvVampirevvV/ClaudePulse/releases/latest/download/ClaudePulse.exe) from the [latest release](https://github.com/VvVampirevvV/ClaudePulse/releases/latest).
 2. Run it, no installer needed. You need [Claude Code](https://docs.claude.com/claude-code) installed and signed in with a Pro or Max plan.
+3. The EXE is not code-signed, so Windows SmartScreen may warn on first launch: click **More info → Run anyway**. Every release is built from this source code by [GitHub Actions](https://github.com/VvVampirevvV/ClaudePulse/actions).
 
 ### From source
 Requires Python 3.10+.
@@ -78,6 +80,9 @@ python main.py
 python build.py
 ```
 The file lands in `dist/ClaudePulse.exe`.
+
+### Releasing
+Push a tag like `v3.2`: GitHub Actions runs the tests, builds the EXE and publishes a release with the matching section of [CHANGELOG.md](CHANGELOG.md).
 
 ### Tests
 ```bash

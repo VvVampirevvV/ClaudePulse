@@ -10,7 +10,8 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet?style=for-the-badge)](https://github.com/TomSchimansky/CustomTkinter)
 [![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)](LICENSE)
-[![Download](https://img.shields.io/badge/Скачать-EXE%203.1-ef4444?style=for-the-badge)](https://github.com/VvVampirevvV/ClaudePulse/raw/main/dist/ClaudePulse.exe)
+[![Release](https://img.shields.io/github/v/release/VvVampirevvV/ClaudePulse?style=for-the-badge&color=ef4444&label=%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C)](https://github.com/VvVampirevvV/ClaudePulse/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/VvVampirevvV/ClaudePulse/ci.yml?branch=main&style=for-the-badge&label=tests)](https://github.com/VvVampirevvV/ClaudePulse/actions)
 
 <p align="center">
   <img src="screenshot.png" alt="Claude Pulse" width="900" style="border-radius: 10px; border: 1px solid #3b3f54;" />
@@ -62,8 +63,9 @@
 ## 🚀 Установка
 
 ### Готовый EXE
-1. Скачайте [`ClaudePulse.exe`](https://github.com/VvVampirevvV/ClaudePulse/raw/main/dist/ClaudePulse.exe) (он же в папке `dist/`).
+1. Скачайте [`ClaudePulse.exe`](https://github.com/VvVampirevvV/ClaudePulse/releases/latest/download/ClaudePulse.exe) из [последнего релиза](https://github.com/VvVampirevvV/ClaudePulse/releases/latest).
 2. Запустите, установка не нужна. Нужен установленный [Claude Code](https://docs.claude.com/claude-code) со входом по подписке Pro или Max.
+3. У EXE нет цифровой подписи, поэтому при первом запуске Windows SmartScreen может предупредить: нажмите **Подробнее → Выполнить в любом случае**. Каждый релиз собирается из этого исходного кода через [GitHub Actions](https://github.com/VvVampirevvV/ClaudePulse/actions).
 
 ### Из исходников
 Нужен Python 3.10 или новее.
@@ -79,6 +81,9 @@ python main.py
 python build.py
 ```
 Файл появится в `dist/ClaudePulse.exe`.
+
+### Выпуск релиза
+Отправьте метку вида `v3.2`: GitHub Actions прогонит тесты, соберёт EXE и опубликует релиз с нужным разделом [CHANGELOG.md](CHANGELOG.md).
 
 ### Тесты
 ```bash

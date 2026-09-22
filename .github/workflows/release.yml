@@ -1,0 +1,37 @@
+name: Release
+
+# Push a tag like v3.1 -> tests, build ClaudePulse.exe, publish a GitHub release
+# with the matching section of CHANGELOG.md as the description.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover tests -v
+      - run: python build.py
+      - name: Release notes from CHANGELOG.md
+        shell: python
+        run: |
+          import os, re
+          version = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"^## \[?v?{re.escape(version)}\]?.*?\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+          notes = m.group(1).strip() if m else f"Claude Pulse {version}"
+          open("release-notes.md", "w", encoding="utf-8").write(notes)
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Claude Pulse ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: dist/ClaudePulse.exe

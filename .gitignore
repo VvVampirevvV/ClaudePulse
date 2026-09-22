@@ -39,3 +39,6 @@ credentials*.json
 # Настоящие тесты проекта — в git
 !tests/
 !tests/test_*.py
+
+# Сборка — только в релизах GitHub, не в репозитории
+dist/
