@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 APP_NAME = "ClaudePulse"
-APP_VERSION = "3.3"
+APP_VERSION = "3.4"
 APPDATA_DIR = Path(os.getenv('CLAUDEPULSE_HOME') or (Path(os.getenv('APPDATA', '')) / APP_NAME))
 CONFIG_FILE = APPDATA_DIR / "config.json"
 

@@ -361,5 +361,75 @@ class TasksTest(unittest.TestCase):
         self.assertEqual(task["result"], "Сделано")
 
 
+class ProcEnvTest(unittest.TestCase):
+    """Чужая сессия Claude Code не должна утекать в наши вызовы claude."""
+
+    def test_outside_session_untouched(self):
+        from src.procenv import clean_env
+        env = {"PATH": "x", "CLAUDE_CODE_GIT_BASH_PATH": "y", "ANTHROPIC_BASE_URL": "http://proxy"}
+        self.assertEqual(clean_env(env, persistent=set()), env)
+
+    def test_inside_session_stripped(self):
+        from src.procenv import clean_env
+        env = {"PATH": "x", "CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": "s", "CLAUDE_CODE_MESSAGING_SOCKET": "p",
+               "CLAUDE_CODE_SDK_HAS_HOST_AUTH_REFRESH": "1", "ANTHROPIC_BASE_URL": "http://localhost:1",
+               "CLAUDE_CODE_GIT_BASH_PATH": "C:/git/bash.exe", "ANTHROPIC_API_KEY": "k",
+               "CLAUDE_EFFORT": "high", "CLAUDEPULSE_HOME": "D:/p"}
+        out = clean_env(env, persistent={"CLAUDE_CODE_GIT_BASH_PATH"})
+        self.assertEqual(out, {"PATH": "x", "CLAUDE_CODE_GIT_BASH_PATH": "C:/git/bash.exe", "ANTHROPIC_API_KEY": "k",
+                               "CLAUDEPULSE_HOME": "D:/p"})
+
+
+class UsageMonitorTest(unittest.TestCase):
+    def make(self, cfg=None):
+        from src.usage_monitor import UsageMonitor
+        self.cfg = dict(cfg or {"alerts_enabled": True, "alert_levels": [80, 95]})
+        m = UsageMonitor(lambda: self.cfg)
+        self.sent, self.logs, self.saves = [], [], []
+        m.notify = lambda title, body: self.sent.append(title)
+        m.log = lambda msg, tag="normal": self.logs.append(msg)
+        m.save = lambda: self.saves.append(1)
+        return m
+
+    def snap(self, pct, reset_text):
+        from src.claude_parser import parse_usage
+        return parse_usage(f"Current session: 10% used\nCurrent week (all models): {pct}% used · resets {reset_text}")
+
+    def test_alert_not_repeated_for_same_window(self):
+        m = self.make()
+        future = datetime.now() + timedelta(days=3)
+        mon = future.strftime("%b")
+        m.snapshot = self.snap(81, f"{mon} {future.day}, 7:59am")
+        m._check_alerts()
+        m.snapshot = self.snap(81, f"{mon} {future.day}, 8am")   # то же окно, записанное иначе
+        m._check_alerts()
+        self.assertEqual(len(self.sent), 1)
+        # Перезапуск программы: память предупреждений лежит в конфиге
+        m2 = self.make(self.cfg)
+        m2.snapshot = self.snap(81, f"{mon} {future.day}, 8am")
+        m2._check_alerts()
+        self.assertEqual(self.sent, [])
+        # Следующий порог в том же окне — новое предупреждение
+        m2.snapshot = self.snap(96, f"{mon} {future.day}, 8am")
+        m2._check_alerts()
+        self.assertEqual(len(self.sent), 1)
+
+    def test_failure_logged_once_then_recovery(self):
+        import src.usage_monitor as um
+        m = self.make()
+        outputs = iter(["Error: auth refresh failed", "Error: auth refresh failed",
+                        "Current session: 5% used\nCurrent week (all models): 1% used"])
+        um.run_cli = lambda cmd, timeout: next(outputs)
+        m.account.get = lambda force=False: {"logged_in": True, "subscription": "max", "email": ""}
+        m._fetch(); m._fetch()
+        self.assertEqual(len(self.logs), 1)
+        self.assertIn("auth refresh failed", self.logs[0])      # в журнале видно, что ответил claude
+        self.assertEqual(m.ok_at, 0.0)
+        m._fetch()
+        self.assertEqual(len(self.logs), 2)                      # «лимиты снова обновляются»
+        self.assertGreater(m.ok_at, 0)
+        self.assertEqual(m.last_error, "")
+
+
 if __name__ == "__main__":
     unittest.main()

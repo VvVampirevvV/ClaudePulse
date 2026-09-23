@@ -6,6 +6,7 @@ import subprocess
 from typing import List, Optional, Dict, Any
 
 from src.claude_parser import parse_rate_limit_reset_time
+from src.procenv import clean_env
 
 
 def find_claude() -> List[str]:
@@ -41,6 +42,7 @@ def run_resume(session_id: str, prompt: str, cwd: str, permission_mode: str, tim
         input=prompt.encode("utf-8"),
         capture_output=True,
         cwd=cwd if cwd and os.path.isdir(cwd) else None,
+        env=clean_env(),
         timeout=timeout,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
@@ -90,7 +92,7 @@ def open_chat_in_terminal(session_id: str, cwd: str):
     folder = cwd if cwd and os.path.isdir(cwd) else os.path.expanduser("~")
     wt = shutil.which("wt")
     if wt:
-        subprocess.Popen([wt, "-d", folder, "cmd", "/k", f"{claude} --resume {session_id}"])
+        subprocess.Popen([wt, "-d", folder, "cmd", "/k", f"{claude} --resume {session_id}"], env=clean_env())
     else:
-        subprocess.Popen(["cmd", "/k", f"{claude} --resume {session_id}"], cwd=folder,
+        subprocess.Popen(["cmd", "/k", f"{claude} --resume {session_id}"], cwd=folder, env=clean_env(),
                          creationflags=subprocess.CREATE_NEW_CONSOLE)

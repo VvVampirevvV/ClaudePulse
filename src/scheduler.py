@@ -87,6 +87,7 @@ class SchedulerManager:
         self.job_running = False
         self.usage = UsageMonitor(lambda: self.config)
         self.usage.log = self._log
+        self.usage.save = self.save
         self.usage.on_update(self._on_usage_update)
         self.updates = UpdateChecker(lambda: self.config, self.save)
         self.updates.log = self._log
@@ -174,6 +175,7 @@ class SchedulerManager:
             "tips": u.snapshot.get("tips", []),
             "account": u.account_info,
             "fetched_at": u.fetched_at,
+            "ok_at": u.ok_at,
             "fetching": u.fetching,
             "error": u.last_error,
             "forced_reset": self.forced_reset_time,

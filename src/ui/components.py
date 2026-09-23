@@ -349,7 +349,7 @@ class QuotaWidget(ctk.CTkFrame):
         self.weekly = _QuotaBlock(self, t("quota.weekly.title"), t("quota.weekly.tip"))
         self.weekly.pack(fill="x", padx=16, pady=(0, 8), ipady=4)
 
-        self.hint = ctk.CTkLabel(self, text="", font=("Inter", 11), text_color=AMBER_TEXT, justify="left", wraplength=520)
+        self.hint = ctk.CTkLabel(self, text="", font=("Inter", 11), text_color=AMBER_TEXT, justify="left", wraplength=400)
 
         ToolTip(self.source_label, t("quota.source.tip"))
         ToolTip(self.refresh_btn, t("quota.refresh.tip"))
@@ -384,12 +384,19 @@ class QuotaWidget(ctk.CTkFrame):
         else:
             self.account_label.configure(text=acc.get("email", ""), text_color="#a1a1aa")
 
-        # Когда обновлялось
+        # Когда обновлялось — по последнему УСПЕШНОМУ ответу, а не по последней попытке
+        err = q.get("error")
+        ok_at = q.get("ok_at") or 0
+        stale = bool(err and ok_at)
         if q.get("fetching"):
-            self.source_label.configure(text=t("quota.updating"))
-        elif q.get("fetched_at"):
-            mins = int((datetime.datetime.now().timestamp() - q["fetched_at"]) // 60)
-            self.source_label.configure(text=t("quota.updated_now") if mins < 1 else t("quota.updated_ago", m=mins))
+            self.source_label.configure(text=t("quota.updating"), text_color=GREY_TEXT)
+        elif stale:
+            self.source_label.configure(
+                text=t("quota.stale", time=datetime.datetime.fromtimestamp(ok_at).strftime("%H:%M")), text_color=AMBER_TEXT)
+        elif ok_at:
+            mins = int((datetime.datetime.now().timestamp() - ok_at) // 60)
+            self.source_label.configure(text=t("quota.updated_now") if mins < 1 else t("quota.updated_ago", m=mins),
+                                        text_color=GREY_TEXT)
 
         # 5-часовое окно
         s = q.get("session", {})
@@ -413,10 +420,12 @@ class QuotaWidget(ctk.CTkFrame):
             reset = t("quota.weekly.reset", when=format_reset(w["reset"])) if w.get("reset") else ""
             self.weekly.show(w["pct"], levels, reset, right, "#a1a1aa")
 
-        # Подсказка, если данных нет
-        err = q.get("error")
-        if err and not s.get("known"):
-            self.hint.configure(text=t("quota.no_data_hint") if err == "no_data" else t("quota.error", err=err))
+        # Подсказка: данных нет совсем или они устарели
+        if err and (stale or not s.get("known")):
+            reason = t("quota.no_data_hint") if err == "no_data" else t("quota.error", err=err)
+            if stale:
+                reason = t("quota.stale_hint", time=datetime.datetime.fromtimestamp(ok_at).strftime("%H:%M")) + " " + reason
+            self.hint.configure(text=reason)
             if not self.hint.winfo_ismapped():
                 self.hint.pack(anchor="w", padx=16, pady=(0, 10))
         elif self.hint.winfo_ismapped():

@@ -4,6 +4,8 @@ import os
 import time
 from typing import Callable
 
+from src.procenv import clean_env
+
 def run_command(
     command: str,
     working_dir: str,
@@ -27,7 +29,9 @@ def run_command(
                 command,
                 cwd=working_dir,
                 shell=True,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
+                env=clean_env(),
                 stderr=subprocess.PIPE,
                 creationflags=creationflags
             )

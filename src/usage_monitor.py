@@ -28,10 +28,11 @@ class UsageMonitor:
 
         self.snapshot: Dict[str, Any] = parse_usage("")
         self.account_info: Dict[str, Any] = {"logged_in": None, "subscription": "", "email": ""}
-        self.fetched_at = 0.0
+        self.fetched_at = 0.0          # последняя попытка
+        self.ok_at = 0.0               # последний успешный ответ — от него считаем «обновлено N мин назад»
         self.last_error = ""
         self.fetching = False
-        self._alerts_sent: Dict[str, int] = {}
+        self.save: Callable[[], None] = lambda: None
 
     # ---------- жизненный цикл ----------
     def start(self):
@@ -72,16 +73,27 @@ class UsageMonitor:
                 self.fetched_at = time.time()
                 if data["has_data"]:
                     self.snapshot = data
-                    self.last_error = ""
+                    self.ok_at = self.fetched_at
+                    error = ""
                 else:
-                    self.last_error = "no_data"
+                    # Начало ответа — в журнал: по нему видно, что именно сказал claude
+                    error = "no_data"
+                    self._last_output = " ".join(text.split())[:300] or "(пусто)"
         except Exception as e:
-            self.last_error = str(e) or e.__class__.__name__
+            self.fetched_at = time.time()
+            error = str(e) or e.__class__.__name__
+            self._last_output = ""
         finally:
             self.fetching = False
 
-        if self.last_error and self.log:
-            self.log(t("log.usage_failed", err=self._error_text()), "warning")
+        # В журнал — только смена состояния, а не одна и та же строка каждые 5 минут
+        was_failing, self.last_error = bool(self.last_error), error
+        if self.log:
+            if error and not was_failing:
+                detail = f" [{self._last_output}]" if self._last_output else ""
+                self.log(t("log.usage_failed", err=self._error_text()) + detail, "warning")
+            elif was_failing and not error:
+                self.log(t("log.usage_recovered"), "success")
         self._check_alerts()
 
         with self._lock:
@@ -91,6 +103,8 @@ class UsageMonitor:
                 cb()
             except Exception:
                 pass
+
+    _last_output = ""
 
     def _error_text(self) -> str:
         return t("quota.no_data_hint") if self.last_error == "no_data" else self.last_error
@@ -153,10 +167,17 @@ class UsageMonitor:
                 continue
             level = reached[-1]
             reset = state.get("reset")
-            key = f"{kind}|{reset.isoformat() if reset else ''}"
-            if self._alerts_sent.get(key, 0) >= level:
+            # /usage пишет сброс то «7:59am», то «8am» — округляем до получаса, чтобы это было одно окно
+            bucket = int(round(reset.timestamp() / 1800) * 1800) if reset else 0
+            key = f"{kind}|{bucket}"
+            sent = cfg.setdefault("alerts_sent", {})
+            if sent.get(key, 0) >= level:
                 continue
-            self._alerts_sent[key] = level
+            sent[key] = level
+            # Старые окна (сброс больше недели назад) из памяти убираем
+            for old in [k for k in sent if k.split("|")[-1].isdigit() and 0 < int(k.split("|")[-1]) < time.time() - 8 * 86400]:
+                del sent[old]
+            self.save()
             when = format_reset(reset) if reset else t("quota.unknown_reset")
             self.notify(
                 t(f"alert.{kind}.title", pct=pct),

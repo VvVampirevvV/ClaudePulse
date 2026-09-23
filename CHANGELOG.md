@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.4] — 2026-09-23
+
+**Download:** `ClaudePulse.exe` below. Requires [Claude Code](https://docs.claude.com/claude-code) signed in with a Pro or Max plan.
+
+### Fixed
+- **Limits stopped updating when the app was started from inside a Claude Code session** (a Claude Code terminal or the Claude desktop app). The app inherited that session's variables, so every `claude` it ran signed in through that session — and returned nothing once the session closed or went idle. The app now drops those inherited variables at start-up and keeps only the ones you set in Windows yourself.
+- The limits card said "updated just now" even when `/usage` was failing. It now shows the time of the last *successful* update, and "⚠ data from 15:53" with an explanation when the numbers are stale.
+- When `/usage` returns no limits, the log shows the start of its answer, and the failure is logged once instead of every 5 minutes (plus a line when it recovers).
+- Limit alerts no longer repeat after a restart or when `/usage` writes the same reset time as "7:59am" one time and "8am" the next.
+- Calls to `claude` no longer wait 3 seconds for input that never comes.
+
+### Русский
+- **Лимиты переставали обновляться, если программу запустили из сессии Claude Code** (терминал Claude Code или приложение Claude): программа наследовала переменные той сессии и входила через неё, а когда сессия закрывалась или засыпала, `/usage` возвращал пустоту. Теперь такие переменные убираются при запуске.
+- Надпись «обновлено только что» больше не врёт: показывается время последнего *успешного* обновления, а при сбое — «⚠ данные от 15:53» с объяснением.
+- Предупреждения о лимитах не повторяются после перезапуска.
+
 ## [3.3] — 2026-09-23
 
 **Download:** `ClaudePulse.exe` below. Requires [Claude Code](https://docs.claude.com/claude-code) signed in with a Pro or Max plan.

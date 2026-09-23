@@ -7,6 +7,8 @@ import subprocess
 from datetime import datetime, timedelta, tzinfo
 from typing import Dict, Any, Optional, List
 
+from src.procenv import clean_env
+
 try:
     from zoneinfo import ZoneInfo
 except ImportError:  # pragma: no cover
@@ -156,12 +158,16 @@ def run_cli(command: str, timeout: float) -> str:
     proc = subprocess.run(
         command,
         shell=True,
+        stdin=subprocess.DEVNULL,   # иначе claude -p ждёт ввода 3 секунды
         capture_output=True,
         cwd=tempfile.gettempdir(),
+        env=clean_env(),
         creationflags=creationflags,
         timeout=timeout,
     )
     raw = proc.stdout or b""
+    if proc.stderr:
+        raw += b"\n" + proc.stderr   # текст ошибки тоже нужен — для журнала, если лимитов в ответе нет
     try:
         return raw.decode('utf-8')
     except UnicodeDecodeError:

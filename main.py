@@ -10,7 +10,7 @@ from src.config import load_config, APP_VERSION
 from src.i18n import set_lang
 from src.scheduler import SchedulerManager
 from src.notifications import send_toast, register_app
-from src import ipc, applog
+from src import ipc, applog, procenv
 from src.ui.main_window import MainWindow
 from src.ui.tray import TrayManager
 from src.single_instance import ensure_single_instance
@@ -43,7 +43,8 @@ def main():
 
     icon_path = resource_path(os.path.join("assets", "icon.ico"))
     register_app(icon_path)
-    applog.write(f"Claude Pulse {APP_VERSION} started")
+    removed = procenv.sanitize_process_env()
+    applog.write(f"Claude Pulse {APP_VERSION} started" + (f"; removed {removed} inherited Claude Code session variables" if removed else ""))
     scheduler.start()
     
     app = None

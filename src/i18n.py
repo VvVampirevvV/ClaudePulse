@@ -335,6 +335,9 @@ RU = {
     "toast.task_limit.title": "Лимит снова кончился",
     "toast.task_limit.body": "Задачу для «{project}» повторю в {when}.",
     "toast.btn.open_chat": "Открыть чат",
+    "quota.stale": "⚠ данные от {time}",
+    "quota.stale_hint": "Не удаётся обновить лимиты с {time} — на экране последние полученные цифры, они могли устареть.",
+    "log.usage_recovered": "Лимиты снова обновляются.",
 }
 
 EN = {
@@ -655,6 +658,9 @@ EN = {
     "toast.task_limit.title": "The limit ran out again",
     "toast.task_limit.body": "Will retry the prompt for \"{project}\" at {when}.",
     "toast.btn.open_chat": "Open chat",
+    "quota.stale": "⚠ data from {time}",
+    "quota.stale_hint": "Can't update limits since {time} — showing the last numbers received, they may be out of date.",
+    "log.usage_recovered": "Limits are updating again.",
 }
 
 _STRINGS = {"ru": RU, "en": EN}
