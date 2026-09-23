@@ -2,6 +2,7 @@
 import os
 import sys
 import tempfile
+import time
 import unittest
 
 # Тесты не должны трогать настоящие настройки пользователя
@@ -221,6 +222,143 @@ class DeferTest(unittest.TestCase):
         self.assertEqual(self.ran, [])
         sch.resume()
         self.assertEqual(sch.next_ping_info()["state"], "scheduled")
+
+
+class SessionsTest(unittest.TestCase):
+    def write(self, folder, sid, entries):
+        from pathlib import Path
+        d = Path(folder) / "C--proj"
+        d.mkdir(parents=True, exist_ok=True)
+        import json as _json
+        (d / f"{sid}.jsonl").write_text("\n".join(_json.dumps(e, ensure_ascii=False) for e in entries), encoding="utf-8")
+
+    def test_list_and_filter(self):
+        from pathlib import Path
+        from src.sessions import list_sessions
+        root = tempfile.mkdtemp()
+        sid = "11111111-2222-3333-4444-555555555555"
+        self.write(root, sid, [
+            {"type": "user", "cwd": r"C:\work\proj", "message": {"content": "<command-name>/clear</command-name>"}},
+            {"type": "user", "cwd": r"C:\work\proj", "message": {"content": [{"type": "text", "text": "почини тесты"}]}},
+            {"type": "ai-title", "aiTitle": "Починка тестов"},
+            {"type": "user", "cwd": r"C:\work\proj", "message": {"content": "и собери релиз"}},
+        ])
+        self.write(root, "99999999-2222-3333-4444-555555555555", [
+            {"type": "user", "cwd": r"C:\tmp", "message": {"content": "/usage"}},
+        ])
+        items = list_sessions(projects_dir=Path(root))
+        self.assertEqual(len(items), 1)          # служебная сессия /usage отфильтрована
+        s = items[0]
+        self.assertEqual(s["id"], sid)
+        self.assertEqual(s["title"], "Починка тестов")
+        self.assertEqual(s["last_prompt"], "и собери релиз")
+        self.assertEqual(s["project"], "proj")
+
+
+class ClaudeResultTest(unittest.TestCase):
+    def test_json_success(self):
+        from src.claude_cli import parse_result
+        r = parse_result('{"type":"result","subtype":"success","is_error":false,"result":"Готово","num_turns":3}', "", 0)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["text"], "Готово")
+        self.assertFalse(r["limit_hit"])
+
+    def test_limit(self):
+        from src.claude_cli import parse_result
+        r = parse_result('{"type":"result","subtype":"success","is_error":true,"result":"You\'ve hit your limit · resets 4am"}', "", 1)
+        self.assertFalse(r["ok"])
+        self.assertTrue(r["limit_hit"])
+        self.assertEqual(r["reset_hint"], "4am")
+
+    def test_plain_error(self):
+        from src.claude_cli import parse_result
+        r = parse_result("", "No conversation found with session ID", 1)
+        self.assertFalse(r["ok"])
+        self.assertFalse(r["limit_hit"])
+        self.assertIn("No conversation", r["text"])
+
+
+class TasksTest(unittest.TestCase):
+    SESSION = {"id": "11111111-2222-3333-4444-555555555555", "cwd": r"C:\work\proj", "title": "t", "project": "proj"}
+
+    def make(self, session_reset_min=None, weekly_pct=10):
+        from src.scheduler import SchedulerManager
+        from src.config import DEFAULT_CONFIG
+        import src.tasks as tasks_mod
+        tasks_mod.TASKS_FILE = __import__("pathlib").Path(tempfile.mkdtemp()) / "tasks.json"
+        sch = SchedulerManager()
+        sch.set_config(dict(DEFAULT_CONFIG))
+        now = datetime.now().astimezone()
+        sch.usage.snapshot = {
+            "session_pct": 100 if session_reset_min else 0,
+            "session_reset": now + timedelta(minutes=session_reset_min) if session_reset_min else None,
+            "weekly_pct": weekly_pct, "weekly_reset": now + timedelta(days=2), "fable_pct": None, "tips": []}
+        sch.tasks.tasks = []
+        return sch.tasks, now
+
+    def test_due_after_session_reset(self):
+        tm, now = self.make(session_reset_min=90)
+        task = tm.create(self.SESSION, "продолжи", "reset", "", "auto")
+        self.assertAlmostEqual(task["due_at"], (now + timedelta(minutes=91)).timestamp(), delta=2)
+
+    def test_due_now_when_limit_free(self):
+        tm, _ = self.make(session_reset_min=None)
+        task = tm.create(self.SESSION, "продолжи", "reset", "", "auto")
+        self.assertLess(task["due_at"] - time.time(), 10)
+
+    def test_weekly_exhausted_waits_for_week(self):
+        tm, now = self.make(session_reset_min=30, weekly_pct=100)
+        task = tm.create(self.SESSION, "продолжи", "reset", "", "auto")
+        self.assertAlmostEqual(task["due_at"], (now + timedelta(days=2, minutes=1)).timestamp(), delta=2)
+
+    def test_validation(self):
+        tm, _ = self.make()
+        with self.assertRaises(ValueError):
+            tm.create(dict(self.SESSION, id="../../etc"), "x", "reset", "", "auto")
+        with self.assertRaises(ValueError):
+            tm.create(self.SESSION, "   ", "reset", "", "auto")
+        with self.assertRaises(ValueError):
+            tm.create(self.SESSION, "x", "time", "25:99", "auto")
+
+    def test_run_limit_then_retry_once(self):
+        import src.tasks as tasks_mod
+        tm, _ = self.make()
+        calls = []
+        def fake(sid, prompt, cwd, mode, timeout):
+            calls.append(mode)
+            return {"ok": False, "text": "usage limit reached", "limit_hit": True, "reset_hint": None}
+        tasks_mod.run_resume = fake
+        task = tm.create(self.SESSION, "продолжи", "reset", "", "edits")
+        task["due_at"] = 0
+        tm.tick()
+        for _ in range(50):
+            if tm.running() is None:
+                break
+            time.sleep(0.05)
+        self.assertEqual(calls, ["acceptEdits"])
+        self.assertEqual(task["status"], "scheduled")     # перенесена, а не провалена
+        self.assertGreater(task["due_at"], time.time() + 60)
+        task["due_at"] = 0
+        tm.tick()
+        for _ in range(50):
+            if tm.running() is None:
+                break
+            time.sleep(0.05)
+        self.assertEqual(task["status"], "failed")        # второй раз — уже ошибка
+
+    def test_run_success(self):
+        import src.tasks as tasks_mod
+        tm, _ = self.make()
+        tasks_mod.run_resume = lambda *a: {"ok": True, "text": "Сделано", "limit_hit": False}
+        task = tm.create(self.SESSION, "продолжи", "time", "00:00", "auto")
+        tm.run_now(task["id"])
+        tm.tick()
+        for _ in range(50):
+            if tm.running() is None:
+                break
+            time.sleep(0.05)
+        self.assertEqual(task["status"], "done")
+        self.assertEqual(task["result"], "Сделано")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ from src.i18n import t, set_lang, get_lang, LANGUAGES
 from src import applog, ipc
 from src.ui.components import (ConsoleLog, QuotaWidget, FeatureCard, ConnectionTile,
                                NextPingCard, TipsCard, ToolTip)
+from src.ui.tasks_page import TasksPage
 
 # ExitLag-inspired Dark Theme Palette
 BG_COLOR = "#0c0d12"
@@ -99,6 +100,8 @@ class MainWindow(ctk.CTk):
         self.body_container = ctk.CTkFrame(self.right_area, fg_color="transparent")
         self.body_container.pack(fill="both", expand=True)
         self._build_page_home()
+        self.tasks_page = TasksPage(self.body_container, self.scheduler, self.log)
+        self.pages["tasks"] = self.tasks_page
         self._build_page_presets()
         self._build_page_schedule()
         self._build_page_system()
@@ -123,7 +126,8 @@ class MainWindow(ctk.CTk):
         ctk.CTkLabel(logo_box, text="PULSE", font=("Inter", 9, "bold"), text_color="#f87171").pack()
         ToolTip(logo_box, t("app.tagline"))
 
-        for page_id, icon in (("home", "🏠"), ("presets", "⚡"), ("schedule", "⏰"), ("system", "🛠️"), ("logs", "📜")):
+        for page_id, icon in (("home", "🏠"), ("tasks", "📨"), ("presets", "⚡"), ("schedule", "⏰"),
+                             ("system", "🛠️"), ("logs", "📜")):
             btn = ctk.CTkButton(
                 self.sidebar, text=icon, font=("Segoe UI Emoji", 19), width=52, height=46, corner_radius=10,
                 fg_color="transparent", hover_color="#181922", text_color=MUTED_COLOR,
@@ -678,6 +682,7 @@ class MainWindow(ctk.CTk):
                                                  self.scheduler.get_last_run_stats(),
                                                  self.scheduler.config.get("command", ""))
                 self._update_banner()
+                self.tasks_page.tick()
                 for command in ipc.take():
                     self.handle_command(command)
                 self.tips_card.update_tips(q.get("tips"))
@@ -731,3 +736,5 @@ class MainWindow(ctk.CTk):
             self.scheduler.run_now()
         elif command == "update":
             self._open_update()
+        elif command.startswith("chat/"):
+            self.tasks_page.open_chat(command.split("/", 1)[1])

@@ -35,6 +35,11 @@ Claude Pro and Max limits work in 5-hour windows: a window opens with your first
 * Polled in the background every 5 minutes (configurable) without using your limit.
 * When there is no data, the app says so instead of showing placeholders.
 
+### 📨 Scheduled prompts — continue after the limit resets
+* Ran out of limit mid-task? Pick the Claude Code chat from a list, write what to do next — the app sends it to **that chat** one minute after the limit resets (or at a set time).
+* Runs in the background with `claude --resume`, so Claude has the whole conversation. You get a notification with the answer and an **Open chat** button.
+* You choose what Claude may do unattended: **Auto** (recommended), **file edits only**, or **read and plan only**.
+
 ### 🎯 Smart ping: "fresh limit by 14:00"
 * Set **when** you need a full limit and the app pings 5 hours earlier.
 * For early targets (e.g. 03:30) the ping goes out the evening before.

@@ -5,12 +5,18 @@
 закрывается, а команду оставляет в файле — работающая копия забирает его раз в секунду.
 """
 import os
+import re
 from typing import List, Optional
 
 from src.config import APPDATA_DIR
 
 COMMAND_FILE = APPDATA_DIR / "commands.txt"
 COMMANDS = ("open", "pause2h", "pause_today", "resume", "ping", "update")
+CHAT_RE = re.compile(r"^chat/[0-9a-f]{8}$")   # открыть чат отложенной задачи: chat/<id задачи>
+
+
+def valid(command: str) -> bool:
+    return command in COMMANDS or bool(CHAT_RE.match(command))
 
 
 def parse_argv(argv: List[str]) -> Optional[str]:
@@ -18,7 +24,7 @@ def parse_argv(argv: List[str]) -> Optional[str]:
     for arg in argv[1:]:
         if arg.lower().startswith("claudepulse:"):
             cmd = arg.split(":", 1)[1].strip("/ ").lower()
-            return cmd if cmd in COMMANDS else "open"
+            return cmd if valid(cmd) else "open"
     return None
 
 
@@ -40,6 +46,6 @@ def take() -> List[str]:
         os.replace(COMMAND_FILE, tmp)
         lines = tmp.read_text(encoding="utf-8").split()
         tmp.unlink()
-        return [c for c in lines if c in COMMANDS]
+        return [c for c in lines if valid(c)]
     except OSError:
         return []

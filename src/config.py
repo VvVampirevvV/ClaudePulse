@@ -1,20 +1,22 @@
 import json
 import os
+import re
 from pathlib import Path
 
 APP_NAME = "ClaudePulse"
-APP_VERSION = "3.2"
+APP_VERSION = "3.3"
 APPDATA_DIR = Path(os.getenv('CLAUDEPULSE_HOME') or (Path(os.getenv('APPDATA', '')) / APP_NAME))
 CONFIG_FILE = APPDATA_DIR / "config.json"
 
 QUOTA_WINDOW_HOURS = 5
 
+# --no-session-persistence: пинг не оставляет пустых «чатов» в ~/.claude/projects
 CLI_PRESETS = {
-    "Claude Code": 'claude -p "ok"',
-    "Claude Code (ping)": 'claude -p "ping"',
-    "Claude Opus Ping": 'claude -p "ok" --model opus',
-    "Claude Sonnet": 'claude -p "ok" --model sonnet',
-    "Claude Haiku": 'claude -p "ok" --model haiku',
+    "Claude Code": 'claude -p "ok" --no-session-persistence',
+    "Claude Code (ping)": 'claude -p "ping" --no-session-persistence',
+    "Claude Opus Ping": 'claude -p "ok" --model opus --no-session-persistence',
+    "Claude Sonnet": 'claude -p "ok" --model sonnet --no-session-persistence',
+    "Claude Haiku": 'claude -p "ok" --model haiku --no-session-persistence',
     "Aider": 'aider --message "ping"',
     "custom": ''
 }
@@ -29,7 +31,7 @@ DEFAULT_CONFIG = {
     "target_times": ["14:00"],
     "interval_hours": 1.0,
     "days": list(DAY_CODES),
-    "command": 'claude -p "ok"',
+    "command": 'claude -p "ok" --no-session-persistence',
     "selected_preset": "Claude Code",
     "working_dir": str(Path.home()),
     "hidden_console": True,
@@ -47,7 +49,11 @@ DEFAULT_CONFIG = {
     "last_job_at": 0.0,
     "paused_until": 0.0,
     "deferred_at": 0.0,
+    "task_timeout_minutes": 60,
 }
+
+# Старые пресеты без --no-session-persistence (до 3.3) — дописываем флаг при загрузке
+_OLD_PRESET_RE = re.compile(r'^claude -p "(ok|ок|ping)"( --model \w+)?$')
 
 # Ключи, которые больше не используются (удаляются при загрузке)
 _OBSOLETE_KEYS = ("quota_window_started_at", "anthropic_sync")
@@ -66,6 +72,8 @@ def load_config():
         # Миграция со старых форматов
         if "time" in data and "times" not in data:
             config["times"] = [data["time"]]
+        if _OLD_PRESET_RE.match(config.get("command", "").strip()):
+            config["command"] = config["command"].strip() + " --no-session-persistence"
         if config.get("selected_preset") == "Пользовательская":
             config["selected_preset"] = "custom"
         for key in _OBSOLETE_KEYS:

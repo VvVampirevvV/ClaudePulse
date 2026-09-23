@@ -65,7 +65,8 @@ class UsageMonitor:
         self.fetching = True
         try:
             self.account_info = self.account.get()
-            text = run_cli('claude -p "/usage"', timeout=USAGE_TIMEOUT)
+            # --no-session-persistence: иначе каждый опрос оставляет в ~/.claude/projects пустой «чат»
+            text = run_cli('claude -p "/usage" --no-session-persistence', timeout=USAGE_TIMEOUT)
             data = parse_usage(text)
             with self._lock:
                 self.fetched_at = time.time()

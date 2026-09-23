@@ -10,6 +10,7 @@ from src.config import save_config, DAY_CODES, QUOTA_WINDOW_HOURS
 from src.claude_parser import parse_rate_limit_reset_time
 from src.usage_monitor import UsageMonitor
 from src.updater import UpdateChecker
+from src.tasks import TaskManager
 from src.notifications import PROTOCOL
 from src.i18n import t
 from src import applog
@@ -89,6 +90,9 @@ class SchedulerManager:
         self.usage.on_update(self._on_usage_update)
         self.updates = UpdateChecker(lambda: self.config, self.save)
         self.updates.log = self._log
+        self.tasks = TaskManager(lambda: self.config, self.usage)
+        self.tasks.log = self._log
+        self.tasks.notify = self._notify
         self.last_run_stats: Dict[str, Any] = {"timestamp": 0.0, "duration": 0.0, "exit_code": None, "command": ""}
 
     # ---------- конфиг ----------
@@ -377,10 +381,13 @@ class SchedulerManager:
 
     def _set_wake_timer(self):
         info = self.next_ping_info()
-        if info["state"] != "scheduled":
+        moments = [time.time() + info["remaining"]] if info["state"] == "scheduled" else []
+        if self.tasks.next_due():
+            moments.append(self.tasks.next_due())   # отложенные задачи тоже будят ПК
+        if not moments:
             return
         try:
-            secs = max(1, int(info["remaining"]))
+            secs = max(1, int(min(moments) - time.time()))
             due_time = ctypes.c_int64(-int(secs * 10_000_000))
             kernel32 = ctypes.windll.kernel32
             timer = kernel32.CreateWaitableTimerW(None, True, "ClaudePulseWakeTimer")
@@ -422,4 +429,5 @@ class SchedulerManager:
                 else:
                     self._job("deferred")
             schedule.run_pending()
+            self.tasks.tick()
             time.sleep(1)
